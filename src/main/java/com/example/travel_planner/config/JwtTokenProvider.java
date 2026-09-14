@@ -66,6 +66,17 @@ public class JwtTokenProvider {
         return result;
     }
 
+    // 리프레쉬 토큰에서 이메일을 꺼내주는 함수 (재발급 시 유저 부가정보 조회용)
+    public String getEmailFromRefreshToken(String token) {
+        try {
+            Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_REFRESH.getBytes()).parseClaimsJws(token).getBody();
+            return (String) claims.get("sub");
+        } catch (Exception e) {
+            System.out.println(e);
+            return null;
+        }
+    }
+
     // 토큰이 만료가 되었는지 안됐는지 확인하는 함수
     public boolean validateAccessToken(String token) {
         try {

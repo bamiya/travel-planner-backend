@@ -195,6 +195,8 @@ public class UserService {
         Map<String, String> token = jwtTokenProvider.generateAccessToken(data.get("refreshToken"));
 
         if(token.get("access_token") != null){ // 성공적으로 재발급이 됨
+            String email = jwtTokenProvider.getEmailFromRefreshToken(data.get("refreshToken"));
+            userRepository.findById(email).ifPresent(u -> token.put("profileImg", u.getProfileImg()));
             return new StatusCode(HttpStatus.OK, token, "액세스 토큰 재발급 성공").sendResponse();
         }else{
             return new StatusCode(HttpStatus.INTERNAL_SERVER_ERROR, "리프레쉬 토큰이 만료되었거나, 알 수 없는 에러").sendResponse();

@@ -25,10 +25,12 @@ public class PlanService {
     private UserRepository userRepository;
     @Autowired
     private LikeRepository likeRepository;
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     public ResponseEntity createPlan(String token, Map<String, String> plan) {
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
             Optional<Users> user = userRepository.findById(getUserEmailFromToken);
@@ -52,7 +54,7 @@ public class PlanService {
 
     public ResponseEntity getUserPlan(String token){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
             List<Plans> resultPlans = planRepository.getPlansByEmail(getUserEmailFromToken);
@@ -66,7 +68,7 @@ public class PlanService {
     @Transactional
     public ResponseEntity updateSharePlan(String token, Map<String, String> data){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
 
@@ -94,7 +96,7 @@ public class PlanService {
 
     public ResponseEntity deleteUserPlan(String token, String id){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
 
@@ -112,7 +114,7 @@ public class PlanService {
 
     public ResponseEntity getUserPlanById(String token, String id){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             Plans plan = planRepository.getPlansByEmailAndId(jwtTokenProvider.getUserEmailFromToken(tokenFilter), id);
             if(plan == null){
@@ -125,7 +127,7 @@ public class PlanService {
     }
     public ResponseEntity getShareMyPlan(String token){ //공유된플랜조회
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             List<Plans> PlanType = planRepository.getSharedPlanType(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
             Collections.reverse(PlanType);
@@ -169,7 +171,7 @@ public class PlanService {
 
     public ResponseEntity updatePlan(String token, Map<String, String> data){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             Optional<Users> user = userRepository.findById(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
             Plans resultPlan = planRepository.getPlansById(data.get("id"));

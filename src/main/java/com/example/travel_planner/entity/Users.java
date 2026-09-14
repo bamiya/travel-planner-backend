@@ -15,6 +15,7 @@ import java.util.List;
 public class Users {
     @Id
     private String email;
+    @JsonIgnore
     @Column(length = 100, nullable = false)
     private String password;
     @Column(length = 50, nullable = false)

@@ -143,6 +143,10 @@ public class Controller {
     public ResponseEntity getMyPage(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
         return commentService.getMyPage(token);
     }
+    @GetMapping("/getMyComments")
+    public ResponseEntity getMyComments(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
+        return commentService.getMyComments(token);
+    }
     @PostMapping("/createPlan")
     public ResponseEntity createPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> plan) {
         return planService.createPlan(token, plan);

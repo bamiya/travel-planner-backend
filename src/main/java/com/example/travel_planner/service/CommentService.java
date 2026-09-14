@@ -66,4 +66,15 @@ public class CommentService {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
         }
     }
+
+    public ResponseEntity getMyComments(String token){ // 내가 쓴 댓글 목록
+        String tokenFilter = token.split(" ")[1];
+        if(jwtTokenProvider.validateAccessToken(tokenFilter)){
+            String email = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
+            List<Comments> comments = commentRepository.findByEmail(email);
+            return new StatusCode(HttpStatus.OK, comments, "내 댓글 조회 성공").sendResponse();
+        }else{
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+    }
 }

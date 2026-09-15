@@ -8,8 +8,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 public class CommentRepositoryTests {
 
     @Autowired
-    CommentRepository commentRepository;
+    TourCommentRepository tourCommentRepository;
+
+    @Autowired
+    PlanCommentRepository planCommentRepository;
 
     @Test
-    public void testClass(){ System.out.println(commentRepository.getClass().getName());}
+    public void testClass(){
+        System.out.println(tourCommentRepository.getClass().getName());
+        System.out.println(planCommentRepository.getClass().getName());
+    }
 }

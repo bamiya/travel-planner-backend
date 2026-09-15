@@ -11,19 +11,22 @@ import java.util.Optional;
 @SpringBootTest
 public class LikesRepositoryTests {
     @Autowired
-    LikeRepository likeRepository;
+    TourLikeRepository tourLikeRepository;
+    @Autowired
+    PlanLikeRepository planLikeRepository;
     @Autowired
     UserRepository userRepository;
 
     @Test
     public void testClass(){
-        System.out.println(likeRepository.getClass().getName());
+        System.out.println(tourLikeRepository.getClass().getName());
+        System.out.println(planLikeRepository.getClass().getName());
     }
 
     @Transactional
     @Test
     public void getLikes(){
-        Optional<Users> user = userRepository.findById("test@test.com");
+        Optional<Users> user = userRepository.findByEmail("test@test.com");
         System.out.println(user);
     }
 }

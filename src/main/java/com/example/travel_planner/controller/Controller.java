@@ -5,6 +5,7 @@ import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.entity.Users;
 import com.example.travel_planner.service.CommentService;
 import com.example.travel_planner.service.LikeService;
+import com.example.travel_planner.service.PasswordResetService;
 import com.example.travel_planner.service.PlanService;
 import com.example.travel_planner.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +27,10 @@ public class Controller {
     private LikeService likeService;
     @Autowired
     private CommentService commentService;
+    @Autowired
+    private PasswordResetService passwordResetService;
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     @GetMapping("/kakaoLogin")
     public ResponseEntity kakaoLogin(@RequestParam String token) {
@@ -55,7 +60,6 @@ public class Controller {
     public ResponseEntity getUserUpdate(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data) {
        return userService.getUserUpdate(token, data);
     }
-    @CrossOrigin
     @DeleteMapping("/userDelete")
     public ResponseEntity userDelete(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
         return userService.userDelete(token);
@@ -68,7 +72,6 @@ public class Controller {
 
     @PostMapping("/tokenAuth") // 그저 테스트
     public ResponseEntity tokenAuth(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
         if(jwtTokenProvider.validateAccessToken(token.split(" ")[1])){
             return new StatusCode(HttpStatus.OK, "인증 성공").sendResponse();
         }else{
@@ -91,9 +94,20 @@ public class Controller {
         return userService.getImage(value);
     }
 
+    // 비밀번호 찾기 절차: 이메일 확인 -> 인증코드 발송 -> 인증코드 검증(resetToken 발급) -> 비밀번호 변경
+    @PostMapping("/sendResetCode")
+    public ResponseEntity sendResetCode(@RequestBody Map<String, String> data) {
+        return passwordResetService.sendResetCode(data.get("email"));
+    }
+
+    @PostMapping("/verifyResetCode")
+    public ResponseEntity verifyResetCode(@RequestBody Map<String, String> data) {
+        return passwordResetService.verifyResetCode(data.get("email"), data.get("code"));
+    }
+
     @PostMapping("/passwordChange")
-    public ResponseEntity passwordChange(@RequestBody Map<String, String> email) {
-        return userService.passwordChange(email);
+    public ResponseEntity passwordChange(@RequestBody Map<String, String> data) {
+        return userService.passwordChange(data);
     }
 
     @PostMapping("/getLikes")
@@ -128,6 +142,10 @@ public class Controller {
     @PostMapping("/getMyPage")
     public ResponseEntity getMyPage(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
         return commentService.getMyPage(token);
+    }
+    @GetMapping("/getMyComments")
+    public ResponseEntity getMyComments(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
+        return commentService.getMyComments(token);
     }
     @PostMapping("/createPlan")
     public ResponseEntity createPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> plan) {

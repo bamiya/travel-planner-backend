@@ -12,4 +12,7 @@ import java.util.Optional;
 public interface CommentRepository extends JpaRepository<Comments, Integer> {
     @Query(value = "select * from comments where id = :id", nativeQuery = true)
     List<Comments> findById(String id);
+
+    @Query(value = "select * from comments where email = :email order by date desc", nativeQuery = true)
+    List<Comments> findByEmail(String email);
 }

@@ -25,10 +25,12 @@ public class CommentService {
 
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     public ResponseEntity addComment(String token, Map<String, String> data){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             String getCommentFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);//요고 집어넣음
             Optional<Users> user = userRepository.findById(getCommentFromToken);
@@ -55,11 +57,22 @@ public class CommentService {
     @Transactional
     public ResponseEntity getMyPage(String token){ //토큰 마이페이지 사용할 리스트출력
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             String getCommentFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
             Optional<Users> user = userRepository.findById(getCommentFromToken);
             return new StatusCode(HttpStatus.OK, user, "댓글 조회 성공").sendResponse();
+        }else{
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+    }
+
+    public ResponseEntity getMyComments(String token){ // 내가 쓴 댓글 목록
+        String tokenFilter = token.split(" ")[1];
+        if(jwtTokenProvider.validateAccessToken(tokenFilter)){
+            String email = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
+            List<Comments> comments = commentRepository.findByEmail(email);
+            return new StatusCode(HttpStatus.OK, comments, "내 댓글 조회 성공").sendResponse();
         }else{
             return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
         }

@@ -23,10 +23,12 @@ public class LikeService {
     private LikeRepository likeRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private JwtTokenProvider jwtTokenProvider;
 
     public ResponseEntity getLikes(String token){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             List<Likes> likes = likeRepository.selectLikeByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
             return new StatusCode(HttpStatus.OK, likes, "좋아요 조회 성공").sendResponse();
@@ -37,7 +39,7 @@ public class LikeService {
 
     public ResponseEntity addLikes(String token, Map<String, String> data){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             Optional<Users> user = userRepository.findById(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
             Likes likes = Likes.builder()
@@ -55,7 +57,7 @@ public class LikeService {
     @Transactional
     public ResponseEntity removeLikes(String token, String id){
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = new JwtTokenProvider();
+        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             Likes likes = likeRepository.findByIdAndEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter), id);
             likeRepository.deleteByIdx(likes.getLikeIdx());

@@ -1,38 +1,24 @@
 package com.example.travel_planner.repository;
 
-import com.example.travel_planner.entity.Comments;
 import com.example.travel_planner.entity.Plans;
+import com.example.travel_planner.entity.Users;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
-public interface PlanRepository extends JpaRepository<Plans, String> {
-    @Query(value = "select * from plans where email = :email", nativeQuery = true)
-    List<Plans> getPlansByEmail(String email);
+public interface PlanRepository extends JpaRepository<Plans, Long> {
+    List<Plans> findByUserOrderByIdDesc(Users user);
 
-    @Query(value = "select * from plans where email = :email and id = :id", nativeQuery = true)
-    Plans getPlansByEmailAndId(String email, String id);
+    Optional<Plans> findByUserAndId(Users user, Long id);
 
-    @Query(value = "select * from plans where email = :email and type = 1", nativeQuery = true)
-    List<Plans> getSharedPlanType(String email); //공유된 플랜 조회
+    List<Plans> findBySharedTrueOrderByIdDesc();
 
-    @Query(value = "delete from plans where id = :idx", nativeQuery = true)
-    void deleteByIdx(int idx);
+    List<Plans> findByUserAndSharedTrueOrderByIdDesc(Users user);
 
-    @Query(value = "delete from comments where id = :idx and type = :type" , nativeQuery = true)
-    void deleteCommentByIdxAndType(int idx, String type);
+    Page<Plans> findBySharedTrue(Pageable pageable);
 
-    @Query(value = "select * from plans where  type = 1", nativeQuery = true)
-    List<Plans> getPlans();
-
-    @Query(value = "select * from plans where id = :idx", nativeQuery = true)
-    Plans getPlansById(String idx);
-
-    @Query(value = "select * from plans where  type = 1", nativeQuery = true)
-    List<Plans> getPlans(Pageable pageable);
-
-    @Query(value = "SELECT COUNT(*) FROM plans WHERE type = 1", nativeQuery = true)
-    Long sharePlanCount();
+    long countBySharedTrue();
 }

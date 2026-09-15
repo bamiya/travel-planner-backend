@@ -2,11 +2,17 @@ package com.example.travel_planner.service;
 
 import com.example.travel_planner.config.JwtTokenProvider;
 import com.example.travel_planner.config.StatusCode;
+import com.example.travel_planner.entity.PlanDay;
+import com.example.travel_planner.entity.PlanStop;
 import com.example.travel_planner.entity.Plans;
 import com.example.travel_planner.entity.Users;
-import com.example.travel_planner.repository.LikeRepository;
+import com.example.travel_planner.repository.PlanCommentRepository;
+import com.example.travel_planner.repository.PlanLikeRepository;
 import com.example.travel_planner.repository.PlanRepository;
+import com.example.travel_planner.repository.TourLikeRepository;
 import com.example.travel_planner.repository.UserRepository;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -15,179 +21,235 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
 public class PlanService {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     @Autowired
     private PlanRepository planRepository;
     @Autowired
     private UserRepository userRepository;
     @Autowired
-    private LikeRepository likeRepository;
+    private PlanLikeRepository planLikeRepository;
+    @Autowired
+    private PlanCommentRepository planCommentRepository;
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
-    public ResponseEntity createPlan(String token, Map<String, String> plan) {
-        String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            Optional<Users> user = userRepository.findById(getUserEmailFromToken);
-            try{
-                Plans plans = Plans.builder()
-                        .email(user.get())
-                        .title(plan.get("title"))
-                        .plan(plan.get("plan"))
-                        .date(plan.get("date"))
-                        .type(Integer.parseInt(plan.get("type")))
-                        .build();
-                planRepository.save(plans);
-                return new StatusCode(HttpStatus.OK, "플랜 생성이 완료되었습니다!").sendResponse();
-            }catch (Exception e){
-                return new StatusCode(HttpStatus.BAD_REQUEST, "서버에 에러가 발생했습니다.").sendResponse();
-            }
-        }else {
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
+    // ---- 프론트가 보내는 plan JSON( [{day, list:[...]}] )을 파싱하기 위한 최소 형태 ----
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class IncomingDay {
+        public int day;
+        public List<IncomingStop> list;
     }
 
-    public ResponseEntity getUserPlan(String token){
-        String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            List<Plans> resultPlans = planRepository.getPlansByEmail(getUserEmailFromToken);
-            Collections.reverse(resultPlans);
-            return new StatusCode(HttpStatus.OK, resultPlans, "유저 플랜 조회 성공").sendResponse();
-        } else {
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "이미 만료된 유저임").sendResponse();
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class IncomingStop {
+        public String addr1, addr2, contentid, firstimage, firstimage2, mapx, mapy, tel, title, zipcode;
+    }
+
+    private List<PlanDay> parseDays(String planJson) throws Exception {
+        List<IncomingDay> incoming = MAPPER.readValue(planJson, MAPPER.getTypeFactory().constructCollectionType(List.class, IncomingDay.class));
+        List<PlanDay> days = new ArrayList<>();
+        for (IncomingDay d : incoming) {
+            List<PlanStop> stops = new ArrayList<>();
+            PlanDay day = PlanDay.builder().dayNumber(d.day).stops(stops).build();
+            if (d.list != null) {
+                int order = 0;
+                for (IncomingStop s : d.list) {
+                    stops.add(PlanStop.builder()
+                            .planDay(day)
+                            .contentid(s.contentid)
+                            .title(s.title)
+                            .addr1(s.addr1)
+                            .addr2(s.addr2)
+                            .zipcode(s.zipcode)
+                            .tel(s.tel)
+                            .firstimage(s.firstimage)
+                            .firstimage2(s.firstimage2)
+                            .mapx(s.mapx)
+                            .mapy(s.mapy)
+                            .orderIndex(order++)
+                            .build());
+                }
+            }
+            days.add(day);
         }
+        return days;
+    }
+
+    private LocalDate[] parseDateRange(String dateRange) {
+        String[] parts = dateRange.split("~");
+        return new LocalDate[]{ LocalDate.parse(parts[0]), LocalDate.parse(parts[1]) };
     }
 
     @Transactional
-    public ResponseEntity updateSharePlan(String token, Map<String, String> data){
+    public ResponseEntity createPlan(String token, Map<String, String> data) {
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-
-            Optional<Users> user = userRepository.findById(getUserEmailFromToken);
-            Plans resultPlan = planRepository.getPlansByEmailAndId(getUserEmailFromToken, data.get("id"));
-
-            if(resultPlan == null){
-                return new StatusCode(HttpStatus.BAD_REQUEST, "알 수 없는 오류").sendResponse();
-            }else {
-                Plans plans = Plans.builder()
-                        .id(resultPlan.getId())
-                        .email(user.get())
-                        .title(resultPlan.getTitle())
-                        .plan(resultPlan.getPlan())
-                        .date(resultPlan.getDate())
-                        .type(resultPlan.getType() == 0 ? 1 : 0)
-                        .build();
-                planRepository.save(plans);
-                return new StatusCode(HttpStatus.OK, "유저 비/공개 변경 성공").sendResponse();
-            }
-        } else {
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        try {
+            Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+            LocalDate[] range = parseDateRange(data.get("date"));
+            List<PlanDay> days = parseDays(data.get("plan"));
+
+            Plans plan = Plans.builder()
+                    .user(user)
+                    .title(data.get("title"))
+                    .startDate(range[0])
+                    .endDate(range[1])
+                    .shared(false)
+                    .days(days)
+                    .build();
+            days.forEach(d -> setDayParent(d, plan));
+            planRepository.save(plan);
+            return new StatusCode(HttpStatus.OK, "플랜 생성이 완료되었습니다!").sendResponse();
+        } catch (Exception e) {
+            return new StatusCode(HttpStatus.BAD_REQUEST, "서버에 에러가 발생했습니다.").sendResponse();
         }
     }
 
-    public ResponseEntity deleteUserPlan(String token, String id){
-        String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if(jwtTokenProvider.validateAccessToken(tokenFilter)){
-            String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-
-            Optional<Users> user = userRepository.findById(getUserEmailFromToken);
-            Plans plan = planRepository.getPlansByEmailAndId(getUserEmailFromToken, id);
-
-            planRepository.deleteByIdx(plan.getId());
-            planRepository.deleteCommentByIdxAndType(plan.getId(), "P");
-            likeRepository.deleteByIdAndType(plan.getId(), "P");    //Type P => Plan
-            return new StatusCode(HttpStatus.OK, "유저 플랜 삭제 성공").sendResponse();
-        }else{
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
+    private void setDayParent(PlanDay day, Plans plan) {
+        // PlanDay.builder()는 plan 필드를 안 받으므로(Plans가 아직 없을 때 만들어짐) 여기서 역참조를 채워준다.
+        day.setPlan(plan);
     }
 
-    public ResponseEntity getUserPlanById(String token, String id){
+    @Transactional
+    public ResponseEntity getUserPlan(String token) {
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if(jwtTokenProvider.validateAccessToken(tokenFilter)){
-            Plans plan = planRepository.getPlansByEmailAndId(jwtTokenProvider.getUserEmailFromToken(tokenFilter), id);
-            if(plan == null){
-                return new StatusCode(HttpStatus.NOT_FOUND, "유저 단일 플랜 조회 못함").sendResponse();
-            }
-            return new StatusCode(HttpStatus.OK, plan, "유저 단일 플랜 조회 성공").sendResponse();
-        }else{
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "이미 만료된 유저임").sendResponse();
         }
-    }
-    public ResponseEntity getShareMyPlan(String token){ //공유된플랜조회
-        String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            List<Plans> PlanType = planRepository.getSharedPlanType(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
-            Collections.reverse(PlanType);
-            return new StatusCode(HttpStatus.OK, PlanType, "공유된플랜조회 성공").sendResponse();
-        }else{
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
+        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+        List<Plans> resultPlans = planRepository.findByUserOrderByIdDesc(user);
+        return new StatusCode(HttpStatus.OK, resultPlans, "유저 플랜 조회 성공").sendResponse();
     }
 
-    public ResponseEntity getPlan(){
-        List<Plans> plans =  planRepository.getPlans();
-        Collections.reverse(plans);
-        System.out.println("가나요:" + plans);
-        for(int i = 0; i < plans.size(); i++){
-            int cnt = likeRepository.selectLikeCount(plans.get(i).getId());
-            plans.get(i).setLikeCount(cnt);
+    @Transactional
+    public ResponseEntity updateSharePlan(String token, Map<String, String> data) {
+        String tokenFilter = token.split(" ")[1];
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+        Optional<Plans> resultPlan = planRepository.findByUserAndId(user, Long.valueOf(data.get("id")));
+
+        if (resultPlan.isEmpty()) {
+            return new StatusCode(HttpStatus.BAD_REQUEST, "알 수 없는 오류").sendResponse();
+        }
+        Plans plan = resultPlan.get();
+        plan.setShared(!plan.isShared());
+        planRepository.save(plan);
+        return new StatusCode(HttpStatus.OK, "유저 비/공개 변경 성공").sendResponse();
+    }
+
+    @Transactional
+    public ResponseEntity deleteUserPlan(String token, String id) {
+        String tokenFilter = token.split(" ")[1];
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+        Optional<Plans> plan = planRepository.findByUserAndId(user, Long.valueOf(id));
+        if (plan.isEmpty()) {
+            return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
+        }
+
+        planLikeRepository.deleteByPlanIn(List.of(plan.get()));
+        planCommentRepository.deleteByPlanIn(List.of(plan.get()));
+        planRepository.delete(plan.get()); // PlanDay/PlanStop은 cascade로 같이 삭제됨
+        return new StatusCode(HttpStatus.OK, "유저 플랜 삭제 성공").sendResponse();
+    }
+
+    @Transactional
+    public ResponseEntity getUserPlanById(String token, String id) {
+        String tokenFilter = token.split(" ")[1];
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+        Optional<Plans> plan = planRepository.findByUserAndId(user, Long.valueOf(id));
+        if (plan.isEmpty()) {
+            return new StatusCode(HttpStatus.NOT_FOUND, "유저 단일 플랜 조회 못함").sendResponse();
+        }
+        return new StatusCode(HttpStatus.OK, plan.get(), "유저 단일 플랜 조회 성공").sendResponse();
+    }
+
+    @Transactional
+    public ResponseEntity getShareMyPlan(String token) { //공유된플랜조회
+        String tokenFilter = token.split(" ")[1];
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+        List<Plans> shared = planRepository.findByUserAndSharedTrueOrderByIdDesc(user);
+        return new StatusCode(HttpStatus.OK, shared, "공유된플랜조회 성공").sendResponse();
+    }
+
+    @Transactional
+    public ResponseEntity getPlan() {
+        List<Plans> plans = planRepository.findBySharedTrueOrderByIdDesc();
+        for (Plans plan : plans) {
+            plan.setLikeCount((int) planLikeRepository.countByPlanId(plan.getId()));
         }
         return new StatusCode(HttpStatus.OK, plans, "공유된플랜보기 조회성공").sendResponse();
     }
 
-    public ResponseEntity getPlanWithPagination(String page, String size){
+    @Transactional
+    public ResponseEntity getPlanWithPagination(String page, String size) {
         Pageable pageRequest = PageRequest.of(Integer.parseInt(page), Integer.parseInt(size));
-        List<Plans> plans = (List<Plans>) planRepository.getPlans(pageRequest);
-        Collections.reverse(plans);
-        for(int i = 0; i < plans.size(); i++){
-            int cnt = likeRepository.selectLikeCount(plans.get(i).getId());
-            plans.get(i).setLikeCount(cnt);
-        }Long totalSize = planRepository.sharePlanCount();
-        List returnData = new ArrayList();
+        List<Plans> plans = planRepository.findBySharedTrue(pageRequest).getContent();
+        for (Plans plan : plans) {
+            plan.setLikeCount((int) planLikeRepository.countByPlanId(plan.getId()));
+        }
+        Long totalSize = planRepository.countBySharedTrue();
+        List<Object> returnData = new ArrayList<>();
         returnData.add(totalSize);
         returnData.add(plans);
         return new StatusCode(HttpStatus.OK, returnData, "페이지네이션").sendResponse();
     }
 
-    public ResponseEntity getPlansById(String id){
-        Plans plan =  planRepository.getPlansById(id);
-        int cnt = likeRepository.selectLikeCount(Integer.parseInt(id));
-        plan.setLikeCount(cnt);
-        return new StatusCode(HttpStatus.OK, plan, "단일 플랜 조회 성공").sendResponse();
+    @Transactional
+    public ResponseEntity getPlansById(String id) {
+        Optional<Plans> plan = planRepository.findById(Long.valueOf(id));
+        if (plan.isEmpty()) {
+            return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
+        }
+        plan.get().setLikeCount((int) planLikeRepository.countByPlanId(plan.get().getId()));
+        return new StatusCode(HttpStatus.OK, plan.get(), "단일 플랜 조회 성공").sendResponse();
     }
 
-    public ResponseEntity updatePlan(String token, Map<String, String> data){
+    @Transactional
+    public ResponseEntity updatePlan(String token, Map<String, String> data) {
         String tokenFilter = token.split(" ")[1];
-        JwtTokenProvider jwtTokenProvider = this.jwtTokenProvider;
-        if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            Optional<Users> user = userRepository.findById(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
-            Plans resultPlan = planRepository.getPlansById(data.get("id"));
-            Plans plans = Plans.builder()
-                    .id(resultPlan.getId())
-                    .email(user.get())
-                    .title(data.get("title"))
-                    .plan(data.get("plan"))
-                    .date(data.get("date"))
-                    .type(resultPlan.getType())
-                    .build();
-            planRepository.save(plans);
-            return new StatusCode(HttpStatus.OK, "업데이트 성공").sendResponse();
-        }else{
+        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
+        }
+        try {
+            Optional<Plans> resultPlan = planRepository.findById(Long.valueOf(data.get("id")));
+            if (resultPlan.isEmpty()) {
+                return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
+            }
+            Plans plan = resultPlan.get();
+            plan.setTitle(data.get("title"));
+            LocalDate[] range = parseDateRange(data.get("date"));
+            plan.setStartDate(range[0]);
+            plan.setEndDate(range[1]);
+
+            // 기존 일자/장소를 지우고 새로 받은 내용으로 교체 (orphanRemoval이 지워준다)
+            plan.getDays().clear();
+            List<PlanDay> newDays = parseDays(data.get("plan"));
+            newDays.forEach(d -> setDayParent(d, plan));
+            plan.getDays().addAll(newDays);
+
+            planRepository.save(plan);
+            return new StatusCode(HttpStatus.OK, "업데이트 성공").sendResponse();
+        } catch (Exception e) {
+            return new StatusCode(HttpStatus.BAD_REQUEST, "서버에 에러가 발생했습니다.").sendResponse();
         }
     }
 }
-

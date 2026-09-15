@@ -3,8 +3,14 @@ package com.example.travel_planner.service;
 import com.example.travel_planner.config.KakaoProvider;
 import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.entity.Users;
+import com.example.travel_planner.repository.PlanCommentRepository;
+import com.example.travel_planner.repository.PlanLikeRepository;
+import com.example.travel_planner.repository.PlanRepository;
+import com.example.travel_planner.repository.TourCommentRepository;
+import com.example.travel_planner.repository.TourLikeRepository;
 import com.example.travel_planner.repository.UserRepository;
 import com.example.travel_planner.config.JwtTokenProvider;
+import com.example.travel_planner.entity.Plans;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -25,6 +31,16 @@ import java.util.*;
 public class UserService {
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private PlanRepository planRepository;
+    @Autowired
+    private TourCommentRepository tourCommentRepository;
+    @Autowired
+    private PlanCommentRepository planCommentRepository;
+    @Autowired
+    private TourLikeRepository tourLikeRepository;
+    @Autowired
+    private PlanLikeRepository planLikeRepository;
 
     @Autowired
     ResourceLoader resourceLoader;
@@ -43,7 +59,8 @@ public class UserService {
 
         Map userInfo = kakaoProvider.getUserInfo(token);
         if (userInfo != null) {
-            Optional<Users> resultEmail = userRepository.findById((String) userInfo.get("email"));
+            String email = (String) userInfo.get("email");
+            Optional<Users> resultEmail = email != null ? userRepository.findByEmail(email) : Optional.empty();
             if (resultEmail.isPresent()) {
                 Map<String, String> tokens = jwtTokenProvider.generateToken(resultEmail.get().getEmail());
                 tokens.put("isUser", "Y");
@@ -57,9 +74,9 @@ public class UserService {
     }
 
     public ResponseEntity login(Map<String, String> data) {
-        Optional<Users> resultEmail = userRepository.findById(data.get("email"));
+        Optional<Users> resultEmail = userRepository.findByEmail(data.get("email"));
         if (resultEmail.isPresent()) {
-            if (!passwordEncoder.matches(data.get("pw"), resultEmail.get().getPassword())) {
+            if (resultEmail.get().getPassword() == null || !passwordEncoder.matches(data.get("pw"), resultEmail.get().getPassword())) {
                 return new StatusCode(HttpStatus.NOT_FOUND, "로그인 실패! 비밀번호를 확인해주세요.").sendResponse();
             }
             Map<String, String> tokens = jwtTokenProvider.generateToken(resultEmail.get().getEmail());
@@ -70,7 +87,7 @@ public class UserService {
     }
 
     public ResponseEntity checkEmail(Map<String, String> email) {
-        Optional<Users> resultEmail = userRepository.findById(email.get("email"));
+        Optional<Users> resultEmail = userRepository.findByEmail(email.get("email"));
         if (resultEmail.isPresent()) {
             return new StatusCode(HttpStatus.OK, "이메일이 있음").sendResponse();
         } else {
@@ -82,7 +99,7 @@ public class UserService {
         String tokenFilter = token.split(" ")[1];
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) { // 인증된 유저
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            Optional<Users> resultEmail = userRepository.findById(getUserEmailFromToken);
+            Optional<Users> resultEmail = userRepository.findByEmail(getUserEmailFromToken);
             return new StatusCode(HttpStatus.OK, resultEmail, "유저 정보 조회 성공").sendResponse();
         } else {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "이미 만료된 유저임").sendResponse();
@@ -95,17 +112,18 @@ public class UserService {
 
         if (jwtTokenProvider.validateAccessToken(tokenFilter)) {
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            Optional<Users> resultEmail = userRepository.findById(getUserEmailFromToken);
+            Optional<Users> resultEmail = userRepository.findByEmail(getUserEmailFromToken);
+            if (resultEmail.isEmpty()) {
+                return new StatusCode(HttpStatus.BAD_REQUEST, "존재하지 않는 회원입니다.").sendResponse();
+            }
 
-            Users users = Users.builder()
-                    .email(resultEmail.get().getEmail())
-                    .name(data.get("name"))
-                    .birth(resultEmail.get().getBirth())
-                    .password(resultEmail.get().getPassword())
-                    .tel(data.get("tel"))
-                    .profileImg(resultEmail.get().getProfileImg())
-                    .build();
-            userRepository.save(users);
+            Users user = resultEmail.get();
+            user.setName(data.get("name"));
+            user.setTel(data.get("tel"));
+            if (data.containsKey("zipcode")) user.setZipcode(data.get("zipcode"));
+            if (data.containsKey("address1")) user.setAddress1(data.get("address1"));
+            if (data.containsKey("address2")) user.setAddress2(data.get("address2"));
+            userRepository.save(user);
 
             return new StatusCode(HttpStatus.OK, "회원수정성공").sendResponse();
         } else {
@@ -118,16 +136,23 @@ public class UserService {
         String tokenFilter = token.split(" ")[1];
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            Optional<Users> resultEmail = userRepository.findById(getUserEmailFromToken);
+            Optional<Users> resultEmail = userRepository.findByEmail(getUserEmailFromToken);
 
             if(resultEmail.isPresent()){
-                List<String> planList = userRepository.getIdByPlans(getUserEmailFromToken); // 해당 이메일로 된 플랜 데이터 get
-                userRepository.deleteLikesByEmail(getUserEmailFromToken);    // 해당 이메일의 좋아요 목록 삭제
-                userRepository.deleteCommentsByEmail(getUserEmailFromToken); // 해당 이메일의 댓글 목록 삭제
-                userRepository.deletePlanListByLikes(planList); // 해당 이메일로 만든 플랜에 단 좋아요를 제거
-                userRepository.deletePlanListByComments(planList); // 해당 이메일로 만든 플랜에 단 댓글을 제거
-                userRepository.deletePlansById(getUserEmailFromToken); // 해당 이메일로 만든 플랜을 제거
-                userRepository.delete(resultEmail.get());
+                Users user = resultEmail.get();
+                List<Plans> myPlans = planRepository.findByUserOrderByIdDesc(user);
+
+                tourLikeRepository.deleteByUser(user);
+                planLikeRepository.deleteByUser(user);
+                tourCommentRepository.deleteByUser(user);
+                planCommentRepository.deleteByUser(user);
+
+                // 내가 만든 플랜에 남의 좋아요/댓글이 달려있을 수 있으니 그것도 정리
+                planLikeRepository.deleteByPlanIn(myPlans);
+                planCommentRepository.deleteByPlanIn(myPlans);
+                planRepository.deleteAll(myPlans); // Plans -> PlanDay -> PlanStop cascade
+
+                userRepository.delete(user);
             } else {
                 return new StatusCode(HttpStatus.BAD_REQUEST, "존재하지 않는 회원입니다.").sendResponse();
             }
@@ -144,20 +169,14 @@ public class UserService {
         //회원 수정란 비밀번호 변경임 안에 내용 수정해야함
         if(jwtTokenProvider.validateAccessToken(tokenFilter)){
             String getUserEmailFromToken = jwtTokenProvider.getUserEmailFromToken(tokenFilter);
-            Optional<Users> resultEmail = userRepository.findById(getUserEmailFromToken);
+            Optional<Users> resultEmail = userRepository.findByEmail(getUserEmailFromToken);
             String pw  = data.get("pw");
             String dbPw = resultEmail.get().getPassword();
 
-            if (passwordEncoder.matches(pw, dbPw)) {
-                Users users = Users.builder()
-                        .email(resultEmail.get().getEmail())
-                        .name(resultEmail.get().getName())
-                        .birth(resultEmail.get().getBirth())
-                        .password(passwordEncoder.encode(data.get("newPw")))
-                        .tel(resultEmail.get().getTel())
-                        .profileImg(resultEmail.get().getProfileImg())
-                        .build();
-                userRepository.save(users);
+            if (dbPw != null && passwordEncoder.matches(pw, dbPw)) {
+                Users user = resultEmail.get();
+                user.setPassword(passwordEncoder.encode(data.get("newPw")));
+                userRepository.save(user);
                 return new StatusCode(HttpStatus.OK, "비밀번호변경 성공").sendResponse();
             } else {
                 return new StatusCode(HttpStatus.BAD_REQUEST, "비밀번호 불일치").sendResponse();
@@ -168,21 +187,23 @@ public class UserService {
     }
 
     @Transactional
-    public ResponseEntity register(Users user) {
+    public ResponseEntity register(Map<String, String> data) {
         try {
+            String email = data.get("email");
             // 이메일 중복 검사
-            if (!userRepository.findByEmail(user.getEmail()).isEmpty()) {
+            if (userRepository.findByEmail(email).isPresent()) {
                 return new StatusCode(HttpStatus.BAD_REQUEST, "이미 존재하는 이메일 입니다.").sendResponse();
             }
 
-            // 존재하지 않는 이메일일시 해당 계정정보 저장 (비밀번호는 반드시 해싱하여 저장)
+            // 클라이언트가 보낼 수 있는 값 중 허용된 필드만 골라서 저장한다 (role 등은 절대 여기서 받지 않는다).
             Users hashedUser = Users.builder()
-                    .email(user.getEmail())
-                    .name(user.getName())
-                    .birth(user.getBirth())
-                    .password(passwordEncoder.encode(user.getPassword()))
-                    .tel(user.getTel())
-                    .profileImg(user.getProfileImg())
+                    .email(email)
+                    .name(data.get("name"))
+                    .birth(data.get("birth") != null ? java.time.LocalDate.parse(data.get("birth")) : null)
+                    .password(passwordEncoder.encode(data.get("password")))
+                    .tel(data.get("tel"))
+                    .profileImg(data.get("profileImg"))
+                    .provider(Users.Provider.LOCAL)
                     .build();
             userRepository.save(hashedUser);
             return new StatusCode(HttpStatus.OK, "회원 가입이 완료되었습니다!").sendResponse();
@@ -196,19 +217,20 @@ public class UserService {
 
         if(token.get("access_token") != null){ // 성공적으로 재발급이 됨
             String email = jwtTokenProvider.getEmailFromRefreshToken(data.get("refreshToken"));
-            userRepository.findById(email).ifPresent(u -> token.put("profileImg", u.getProfileImg()));
+            userRepository.findByEmail(email).ifPresent(u -> token.put("profileImg", u.getProfileImg()));
             return new StatusCode(HttpStatus.OK, token, "액세스 토큰 재발급 성공").sendResponse();
         }else{
             return new StatusCode(HttpStatus.INTERNAL_SERVER_ERROR, "리프레쉬 토큰이 만료되었거나, 알 수 없는 에러").sendResponse();
         }
     }
 
+    @Transactional
     public ResponseEntity uploadFile(MultipartFile file, String token){
         String tokenFilter = token.split(" ")[1];
         if (!jwtTokenProvider.validateAccessToken(tokenFilter)) { // 인증된 유저
             return new StatusCode(HttpStatus.UNAUTHORIZED, "토큰 만료").sendResponse();
         }
-        Optional<Users> email = userRepository.findById(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
+        Optional<Users> resultEmail = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter));
 
         // file image 가 없을 경우
         if (file.isEmpty()) {
@@ -229,15 +251,9 @@ public class UserService {
             }
             file.transferTo(dest);
 
-            Users users = Users.builder()
-                    .email(email.get().getEmail())
-                    .name(email.get().getName())
-                    .birth(email.get().getBirth())
-                    .password(email.get().getPassword())
-                    .tel(email.get().getTel())
-                    .profileImg(storedFileName)
-                    .build();
-            userRepository.save(users);
+            Users user = resultEmail.get();
+            user.setProfileImg(storedFileName);
+            userRepository.save(user);
         } catch (Exception e) {
             e.printStackTrace();
             return new StatusCode(HttpStatus.INTERNAL_SERVER_ERROR, "업로드 실패").sendResponse();
@@ -254,17 +270,11 @@ public class UserService {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "인증이 만료되었습니다. 다시 시도해주세요.").sendResponse();
         }
 
-        Optional<Users> resultEmail = userRepository.findById(email);
+        Optional<Users> resultEmail = userRepository.findByEmail(email);
         if (resultEmail.isPresent()) {
-            Users users = Users.builder()
-                    .email(resultEmail.get().getEmail())
-                    .name(resultEmail.get().getName())
-                    .birth(resultEmail.get().getBirth())
-                    .password(passwordEncoder.encode(data.get("pw")))
-                    .tel(resultEmail.get().getTel())
-                    .profileImg(resultEmail.get().getProfileImg())
-                    .build();
-            userRepository.save(users);
+            Users user = resultEmail.get();
+            user.setPassword(passwordEncoder.encode(data.get("pw")));
+            userRepository.save(user);
             return new StatusCode(HttpStatus.OK, "비밀번호 변경").sendResponse();
 
         } else {

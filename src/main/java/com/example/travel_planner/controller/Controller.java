@@ -2,12 +2,13 @@ package com.example.travel_planner.controller;
 
 import com.example.travel_planner.config.JwtTokenProvider;
 import com.example.travel_planner.config.StatusCode;
-import com.example.travel_planner.entity.Users;
+import com.example.travel_planner.config.Views;
 import com.example.travel_planner.service.CommentService;
 import com.example.travel_planner.service.LikeService;
 import com.example.travel_planner.service.PasswordResetService;
 import com.example.travel_planner.service.PlanService;
 import com.example.travel_planner.service.UserService;
+import com.fasterxml.jackson.annotation.JsonView;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -47,6 +48,8 @@ public class Controller {
         return userService.checkEmail(email);
     }
 
+    // 본인 계정 조회 - 연락처/생년월일/주소 등 전체 정보를 내려줘야 하므로 Owner 뷰
+    @JsonView(Views.Owner.class)
     @GetMapping("/getUserInfo")
     public ResponseEntity getUserInfo(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         return userService.getUserInfo(token);
@@ -65,9 +68,11 @@ public class Controller {
         return userService.userDelete(token);
     }
 
+    // Map으로 받아 이메일/비밀번호/이름/연락처/생년월일/프로필사진만 서비스에서 골라 쓴다.
+    // Users 엔티티를 그대로 바인딩하면 role="ADMIN" 같은 필드까지 클라이언트가 직접 지정할 수 있어 위험하다.
     @PostMapping("/register")
-    public ResponseEntity register(@RequestBody Users user) {
-        return userService.register(user);
+    public ResponseEntity register(@RequestBody Map<String, String> data) {
+        return userService.register(data);
     }
 
     @PostMapping("/tokenAuth") // 그저 테스트
@@ -110,6 +115,7 @@ public class Controller {
         return userService.passwordChange(data);
     }
 
+    @JsonView(Views.Public.class)
     @PostMapping("/getLikes")
     public ResponseEntity getLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
         return likeService.getLikes(token);
@@ -120,9 +126,10 @@ public class Controller {
         return likeService.addLikes(token, data);
     }
 
+    // type: "T"(관광지) 또는 "P"(플랜) - 좋아요 대상 id가 두 테이블에서 겹칠 수 있어 구분이 필요하다.
     @DeleteMapping("/removeLikes/{id}")
-    public ResponseEntity removeLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id){
-        return likeService.removeLikes(token, id);
+    public ResponseEntity removeLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id, @RequestParam(defaultValue = "T") String type){
+        return likeService.removeLikes(token, id, type);
     }
 
     @GetMapping("/getLikeCount/{id}")
@@ -130,19 +137,20 @@ public class Controller {
         return likeService.getLikeCount(id);
     }
 
+    @JsonView(Views.Public.class)
     @PostMapping("/addComment")
     public ResponseEntity addComment(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
         return commentService.addComment(token, data);
     }
 
+    // type: "T"(관광지) 또는 "P"(플랜) - id가 두 테이블에서 겹칠 수 있어 구분이 필요하다.
+    @JsonView(Views.Public.class)
     @GetMapping("/getComment")
-    public ResponseEntity getComment(@RequestParam String id){
-        return commentService.getComment(id);
+    public ResponseEntity getComment(@RequestParam String id, @RequestParam(defaultValue = "T") String type){
+        return commentService.getComment(id, type);
     }
-    @PostMapping("/getMyPage")
-    public ResponseEntity getMyPage(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
-        return commentService.getMyPage(token);
-    }
+
+    @JsonView(Views.Public.class)
     @GetMapping("/getMyComments")
     public ResponseEntity getMyComments(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
         return commentService.getMyComments(token);
@@ -152,6 +160,7 @@ public class Controller {
         return planService.createPlan(token, plan);
     }
 
+    @JsonView(Views.Public.class)
     @GetMapping("/getUserPlan")
     public ResponseEntity getUserPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         return planService.getUserPlan(token);
@@ -171,25 +180,28 @@ public class Controller {
     public ResponseEntity deleteUserPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id){
         return planService.deleteUserPlan(token, id);
     }
+    @JsonView(Views.Public.class)
     @GetMapping("/getUserPlanById/{id}")
     public ResponseEntity getUserPlanById(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id){
         return planService.getUserPlanById(token, id);
     }
 
+    @JsonView(Views.Public.class)
     @GetMapping("/getShareMyPlan")
     public ResponseEntity getShareMyPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
         return planService.getShareMyPlan(token);
     }
+
+    @JsonView(Views.Public.class)
     @GetMapping("/getPlan")
     public ResponseEntity getPlan(){ return planService.getPlan();}
 
+    @JsonView(Views.Public.class)
     @GetMapping("/getPlanWithPagination")
     public ResponseEntity getPlanWithPagination(@RequestParam String page, @RequestParam String size){
         return planService.getPlanWithPagination(page, size);}
 
-
-
-
+    @JsonView(Views.Public.class)
     @GetMapping("/getPlansById/{id}")
     public ResponseEntity getPlansById(@PathVariable String id){
         return planService.getPlansById(id);

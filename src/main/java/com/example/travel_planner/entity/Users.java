@@ -1,38 +1,97 @@
 package com.example.travel_planner.entity;
 
+import com.example.travel_planner.config.Views;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonView;
 import lombok.*;
 import javax.persistence.*;
-import java.util.List;
+import java.time.LocalDateTime;
 
-@Entity //JPA로 관리되는 엔티티객체. 즉 테이블
-@Table
+@Entity
+@Table(name = "users")
 @ToString
 @Getter
+@Setter
 @Builder
 @AllArgsConstructor
-@NoArgsConstructor //빈생성자
+@NoArgsConstructor
 public class Users {
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonView(Views.Public.class)
+    private Long id;
+
+    @Column(length = 255, nullable = false, unique = true)
+    @JsonView(Views.Public.class)
     private String email;
+
     @JsonIgnore
-    @Column(length = 100, nullable = false)
-    private String password;
+    @Column(length = 100)
+    private String password; // 소셜 전용 계정은 로컬 비밀번호가 없어 NULL 허용
+
     @Column(length = 50, nullable = false)
+    @JsonView(Views.Public.class)
     private String name;
+
     @Column(length = 50)
+    @JsonView(Views.Public.class)
     private String profileImg;
-    @Column(length = 12, nullable = false)
+
+    // 아래부터는 본인 계정 조회/수정 화면 전용 - 다른 사용자에게 노출되면 안 되는 정보라 Owner 뷰에서만 직렬화된다.
+    @Column(length = 20)
+    @JsonView(Views.Owner.class)
     private String tel;
-    @Column(nullable = false)
+
+    @JsonView(Views.Owner.class)
     private java.time.LocalDate birth;
 
-//    @OneToMany(mappedBy = "email", orphanRemoval = true) // 좋아요 쪽 매핑 mappedBy는 필트 명이 아닌 변수 명으로 해야함. orphanRemoval은 삭제, 수정 시 관계되어있거 다 삭제
-//    private List<Likes> likes;
-//
-//    @OneToMany(mappedBy = "email", orphanRemoval = true) // 댓글 쪽 매핑 mappedBy는 필트 명이 아닌 변수 명으로 해야함
-//    private List<Comments> comments;
-//
-//    @OneToMany(mappedBy = "email", orphanRemoval = true) // 플랜 쪽 매핑 mappedBy는 필트 명이 아닌 변수 명으로 해야함
-//    private List<Plans> plans;
+    @Column(length = 10)
+    @JsonView(Views.Owner.class)
+    private String zipcode;
+
+    @Column(length = 255)
+    @JsonView(Views.Owner.class)
+    private String address1; // 기본주소(도로명/지번)
+
+    @Column(length = 255)
+    @JsonView(Views.Owner.class)
+    private String address2; // 상세주소
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    @Builder.Default
+    @JsonView(Views.Owner.class)
+    private Provider provider = Provider.LOCAL;
+
+    @Column(length = 100)
+    @JsonIgnore
+    private String providerId; // 소셜 로그인 제공자가 주는 고유 회원 식별자 (내부용, 응답에 노출 안 함)
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, nullable = false)
+    @Builder.Default
+    @JsonView(Views.Owner.class)
+    private Role role = Role.USER;
+
+    @Column(nullable = false, updatable = false)
+    @JsonView(Views.Owner.class)
+    private LocalDateTime createdAt;
+
+    @Column(nullable = false)
+    @JsonView(Views.Owner.class)
+    private LocalDateTime updatedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = createdAt;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public enum Provider { LOCAL, KAKAO, NAVER }
+    public enum Role { USER, ADMIN }
 }

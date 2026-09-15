@@ -31,7 +31,7 @@ public class PasswordResetService {
     private JavaMailSender mailSender;
 
     public ResponseEntity sendResetCode(String email) {
-        if (userRepository.findById(email).isEmpty()) {
+        if (userRepository.findByEmail(email).isEmpty()) {
             return new StatusCode(HttpStatus.BAD_REQUEST, "없는 이메일 입니다").sendResponse();
         }
 

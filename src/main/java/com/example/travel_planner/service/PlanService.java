@@ -109,6 +109,7 @@ public class PlanService {
             planRepository.save(plan);
             return new StatusCode(HttpStatus.OK, "플랜 생성이 완료되었습니다!").sendResponse();
         } catch (Exception e) {
+            e.printStackTrace();
             return new StatusCode(HttpStatus.BAD_REQUEST, "서버에 에러가 발생했습니다.").sendResponse();
         }
     }

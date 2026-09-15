@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @RestController
 @RequestMapping("/")
@@ -205,6 +206,15 @@ public class Controller {
     @GetMapping("/getPlansById/{id}")
     public ResponseEntity getPlansById(@PathVariable String id){
         return planService.getPlansById(id);
+    }
+
+    // 토큰은 유효하지만(서명/만료 통과) 그 안의 이메일에 해당하는 회원이 DB에 없는 경우
+    // (다른 기기에서 탈퇴했거나 관리자가 삭제한 경우 등) 서비스 곳곳의 .orElseThrow()가
+    // NoSuchElementException을 던진다. 이걸 그냥 500으로 흘려보내는 대신, "다시 로그인해주세요"
+    // 의미의 401로 통일해서 응답한다.
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity handleUserNotFound() {
+        return new StatusCode(HttpStatus.UNAUTHORIZED, "존재하지 않는 회원입니다. 다시 로그인해주세요.").sendResponse();
     }
 
 }

@@ -54,10 +54,22 @@ public class UserService {
     @Value("${app.upload.dir}")
     private String uploadDir;
 
-    public ResponseEntity<?> getUserInfoKakao(String token) {
+    @Value("${app.kakao.client-id}")
+    private String kakaoClientId;
+    @Value("${app.kakao.client-secret}")
+    private String kakaoClientSecret;
+    @Value("${app.kakao.redirect-uri}")
+    private String kakaoRedirectUri;
+
+    public ResponseEntity<?> getUserInfoKakao(String code) {
         KakaoProvider kakaoProvider = new KakaoProvider();
 
-        Map<String, Object> userInfo = kakaoProvider.getUserInfo(token);
+        String kakaoAccessToken = kakaoProvider.exchangeCodeForToken(code, kakaoClientId, kakaoClientSecret, kakaoRedirectUri);
+        if (kakaoAccessToken == null) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "카카오 인증에 실패했습니다.").sendResponse();
+        }
+
+        Map<String, Object> userInfo = kakaoProvider.getUserInfo(kakaoAccessToken);
         if (userInfo != null) {
             String email = (String) userInfo.get("email");
             Optional<Users> resultEmail = email != null ? userRepository.findByEmail(email) : Optional.empty();

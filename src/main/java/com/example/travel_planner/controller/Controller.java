@@ -34,8 +34,8 @@ public class Controller {
     private PasswordResetService passwordResetService;
 
     @GetMapping("/kakaoLogin")
-    public ResponseEntity<?> kakaoLogin(@RequestParam String token) {
-        return userService.getUserInfoKakao(token);
+    public ResponseEntity<?> kakaoLogin(@RequestParam String code) {
+        return userService.getUserInfoKakao(code);
     }
 
     @PostMapping("/login")

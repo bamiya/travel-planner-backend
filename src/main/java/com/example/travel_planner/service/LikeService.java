@@ -29,7 +29,7 @@ public class LikeService {
     @Autowired
     private PlanRepository planRepository;
 
-    public ResponseEntity getLikes(Users user) {
+    public ResponseEntity<?> getLikes(Users user) {
         // 프론트는 관광지 좋아요/플랜 좋아요를 한 배열로 받아 type("T"/"P")으로 걸러 쓴다.
         List<Object> likes = new ArrayList<>();
         likes.addAll(tourLikeRepository.findByUser(user));
@@ -38,7 +38,7 @@ public class LikeService {
     }
 
     @Transactional
-    public ResponseEntity addLikes(Users user, Map<String, String> data) {
+    public ResponseEntity<?> addLikes(Users user, Map<String, String> data) {
         String id = data.get("id");
         TargetType type = TargetType.valueOf(data.getOrDefault("type", "T"));
 
@@ -59,7 +59,7 @@ public class LikeService {
     }
 
     @Transactional
-    public ResponseEntity removeLikes(Users user, String id, String type) {
+    public ResponseEntity<?> removeLikes(Users user, String id, String type) {
         if (TargetType.valueOf(type) == TargetType.P) {
             planLikeRepository.findByUserAndPlanId(user, Long.valueOf(id)).ifPresent(planLikeRepository::delete);
         } else {
@@ -68,7 +68,7 @@ public class LikeService {
         return new StatusCode(HttpStatus.OK, "좋아요 삭제 성공").sendResponse();
     }
 
-    public ResponseEntity getLikeCount(String id) {
+    public ResponseEntity<?> getLikeCount(String id) {
         long cnt = tourLikeRepository.countByContentid(id);
         return new StatusCode(HttpStatus.OK, cnt, "좋아요 수 불러오기 완료").sendResponse();
     }

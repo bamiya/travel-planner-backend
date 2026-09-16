@@ -54,10 +54,10 @@ public class UserService {
     @Value("${app.upload.dir}")
     private String uploadDir;
 
-    public ResponseEntity getUserInfoKakao(String token) {
+    public ResponseEntity<?> getUserInfoKakao(String token) {
         KakaoProvider kakaoProvider = new KakaoProvider();
 
-        Map userInfo = kakaoProvider.getUserInfo(token);
+        Map<String, Object> userInfo = kakaoProvider.getUserInfo(token);
         if (userInfo != null) {
             String email = (String) userInfo.get("email");
             Optional<Users> resultEmail = email != null ? userRepository.findByEmail(email) : Optional.empty();
@@ -73,7 +73,7 @@ public class UserService {
         return new StatusCode(HttpStatus.UNAUTHORIZED, "알 수 없는 오류로 잠시 후 로그인을 시도해주세요.").sendResponse();
     }
 
-    public ResponseEntity login(Map<String, String> data) {
+    public ResponseEntity<?> login(Map<String, String> data) {
         Optional<Users> resultEmail = userRepository.findByEmail(data.get("email"));
         if (resultEmail.isPresent()) {
             if (resultEmail.get().getPassword() == null || !passwordEncoder.matches(data.get("pw"), resultEmail.get().getPassword())) {
@@ -86,7 +86,7 @@ public class UserService {
         return new StatusCode(HttpStatus.NOT_FOUND, "로그인 실패! 아이디 또는 비밀번호를 확인해주세요.").sendResponse();
     }
 
-    public ResponseEntity checkEmail(Map<String, String> email) {
+    public ResponseEntity<?> checkEmail(Map<String, String> email) {
         Optional<Users> resultEmail = userRepository.findByEmail(email.get("email"));
         if (resultEmail.isPresent()) {
             return new StatusCode(HttpStatus.OK, "이메일이 있음").sendResponse();
@@ -95,12 +95,12 @@ public class UserService {
         }
     }
 
-    public ResponseEntity getUserInfo(Users user) {
+    public ResponseEntity<?> getUserInfo(Users user) {
         return new StatusCode(HttpStatus.OK, user, "유저 정보 조회 성공").sendResponse();
     }
 
     @Transactional
-    public ResponseEntity getUserUpdate(Users user, Map<String, String> data) {
+    public ResponseEntity<?> getUserUpdate(Users user, Map<String, String> data) {
         user.setName(data.get("name"));
         user.setTel(data.get("tel"));
         if (data.containsKey("zipcode")) user.setZipcode(data.get("zipcode"));
@@ -112,7 +112,7 @@ public class UserService {
     }
 
     @Transactional
-    public ResponseEntity userDelete(Users user){
+    public ResponseEntity<?> userDelete(Users user){
         List<Plans> myPlans = planRepository.findByUserOrderByIdDesc(user);
 
         tourLikeRepository.deleteByUser(user);
@@ -130,7 +130,7 @@ public class UserService {
     }
 
     @Transactional
-    public ResponseEntity getUserUpdatePw(Users user, Map<String, String> data){
+    public ResponseEntity<?> getUserUpdatePw(Users user, Map<String, String> data){
         String pw = data.get("pw");
         String dbPw = user.getPassword();
 
@@ -144,7 +144,7 @@ public class UserService {
     }
 
     @Transactional
-    public ResponseEntity register(Map<String, String> data) {
+    public ResponseEntity<?> register(Map<String, String> data) {
         try {
             String email = data.get("email");
             // 이메일 중복 검사
@@ -169,7 +169,7 @@ public class UserService {
         }
     }
 
-    public ResponseEntity getTokenUsedRefreshToken(Map<String, String> data){
+    public ResponseEntity<?> getTokenUsedRefreshToken(Map<String, String> data){
         Map<String, String> token = jwtTokenProvider.generateAccessToken(data.get("refreshToken"));
 
         if(token.get("access_token") != null){ // 성공적으로 재발급이 됨
@@ -182,7 +182,7 @@ public class UserService {
     }
 
     @Transactional
-    public ResponseEntity uploadFile(MultipartFile file, Users user){
+    public ResponseEntity<?> uploadFile(MultipartFile file, Users user){
         // file image 가 없을 경우
         if (file.isEmpty()) {
             return new StatusCode(HttpStatus.OK, "업로드 성공").sendResponse();
@@ -214,7 +214,7 @@ public class UserService {
 
     // 비밀번호 찾기: 반드시 이메일 인증코드 확인 후 발급된 resetToken을 통해서만 변경 가능
     @Transactional
-    public ResponseEntity passwordChange(Map<String, String> data) {
+    public ResponseEntity<?> passwordChange(Map<String, String> data) {
         String email = jwtTokenProvider.getEmailFromResetToken(data.get("resetToken"));
         if (email == null) {
             return new StatusCode(HttpStatus.UNAUTHORIZED, "인증이 만료되었습니다. 다시 시도해주세요.").sendResponse();

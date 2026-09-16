@@ -80,7 +80,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity createPlan(Users user, Map<String, String> data) {
+    public ResponseEntity<?> createPlan(Users user, Map<String, String> data) {
         try {
             LocalDate[] range = parseDateRange(data.get("date"));
             List<PlanDay> days = parseDays(data.get("plan"));
@@ -108,13 +108,13 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity getUserPlan(Users user) {
+    public ResponseEntity<?> getUserPlan(Users user) {
         List<Plans> resultPlans = planRepository.findByUserOrderByIdDesc(user);
         return new StatusCode(HttpStatus.OK, resultPlans, "유저 플랜 조회 성공").sendResponse();
     }
 
     @Transactional
-    public ResponseEntity updateSharePlan(Users user, Map<String, String> data) {
+    public ResponseEntity<?> updateSharePlan(Users user, Map<String, String> data) {
         Optional<Plans> resultPlan = planRepository.findByUserAndId(user, Long.valueOf(data.get("id")));
 
         if (resultPlan.isEmpty()) {
@@ -127,7 +127,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity deleteUserPlan(Users user, String id) {
+    public ResponseEntity<?> deleteUserPlan(Users user, String id) {
         Optional<Plans> plan = planRepository.findByUserAndId(user, Long.valueOf(id));
         if (plan.isEmpty()) {
             return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
@@ -140,7 +140,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity getUserPlanById(Users user, String id) {
+    public ResponseEntity<?> getUserPlanById(Users user, String id) {
         Optional<Plans> plan = planRepository.findByUserAndId(user, Long.valueOf(id));
         if (plan.isEmpty()) {
             return new StatusCode(HttpStatus.NOT_FOUND, "유저 단일 플랜 조회 못함").sendResponse();
@@ -149,13 +149,13 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity getShareMyPlan(Users user) { //공유된플랜조회
+    public ResponseEntity<?> getShareMyPlan(Users user) { //공유된플랜조회
         List<Plans> shared = planRepository.findByUserAndSharedTrueOrderByIdDesc(user);
         return new StatusCode(HttpStatus.OK, shared, "공유된플랜조회 성공").sendResponse();
     }
 
     @Transactional
-    public ResponseEntity getPlan() {
+    public ResponseEntity<?> getPlan() {
         List<Plans> plans = planRepository.findBySharedTrueOrderByIdDesc();
         for (Plans plan : plans) {
             plan.setLikeCount((int) planLikeRepository.countByPlanId(plan.getId()));
@@ -164,7 +164,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity getPlanWithPagination(String page, String size) {
+    public ResponseEntity<?> getPlanWithPagination(String page, String size) {
         Pageable pageRequest = PageRequest.of(Integer.parseInt(page), Integer.parseInt(size));
         List<Plans> plans = planRepository.findBySharedTrue(pageRequest).getContent();
         for (Plans plan : plans) {
@@ -178,7 +178,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity getPlansById(String id) {
+    public ResponseEntity<?> getPlansById(String id) {
         Optional<Plans> plan = planRepository.findById(Long.valueOf(id));
         if (plan.isEmpty()) {
             return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
@@ -188,7 +188,7 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity updatePlan(Users user, Map<String, String> data) {
+    public ResponseEntity<?> updatePlan(Users user, Map<String, String> data) {
         try {
             Optional<Plans> resultPlan = planRepository.findById(Long.valueOf(data.get("id")));
             if (resultPlan.isEmpty()) {

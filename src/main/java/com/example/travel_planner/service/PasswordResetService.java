@@ -30,7 +30,7 @@ public class PasswordResetService {
     @Autowired
     private JavaMailSender mailSender;
 
-    public ResponseEntity sendResetCode(String email) {
+    public ResponseEntity<?> sendResetCode(String email) {
         if (userRepository.findByEmail(email).isEmpty()) {
             return new StatusCode(HttpStatus.BAD_REQUEST, "없는 이메일 입니다").sendResponse();
         }
@@ -52,7 +52,7 @@ public class PasswordResetService {
         return new StatusCode(HttpStatus.OK, "인증코드를 발송했습니다.").sendResponse();
     }
 
-    public ResponseEntity verifyResetCode(String email, String code) {
+    public ResponseEntity<?> verifyResetCode(String email, String code) {
         CodeEntry entry = codesByEmail.get(email);
         if (entry == null || entry.isExpired() || !entry.code.equals(code)) {
             return new StatusCode(HttpStatus.BAD_REQUEST, "인증코드가 올바르지 않거나 만료되었습니다.").sendResponse();

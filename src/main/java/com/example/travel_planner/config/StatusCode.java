@@ -24,7 +24,7 @@ public class StatusCode {
         this.msg = msg;
     }
 
-        public ResponseEntity sendResponse(){
+        public ResponseEntity<?> sendResponse(){
             Map<String, Object> data = new HashMap<>();
             if(this.data != null) data.put("data", this.data);
             data.put("msg", this.msg);

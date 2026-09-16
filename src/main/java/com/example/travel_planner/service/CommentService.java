@@ -31,7 +31,7 @@ public class CommentService {
     private PlanRepository planRepository;
 
     @Transactional
-    public ResponseEntity addComment(Users user, Map<String, String> data) {
+    public ResponseEntity<?> addComment(Users user, Map<String, String> data) {
         String id = data.get("id");
         TargetType type = TargetType.valueOf(data.getOrDefault("type", "T"));
 
@@ -49,7 +49,7 @@ public class CommentService {
         return new StatusCode(HttpStatus.OK, "댓글 추가 성공").sendResponse();
     }
 
-    public ResponseEntity getComment(String id, String type) {
+    public ResponseEntity<?> getComment(String id, String type) {
         if (TargetType.valueOf(type) == TargetType.P) {
             List<PlanComment> comments = planCommentRepository.findByPlanId(Long.valueOf(id));
             return new StatusCode(HttpStatus.OK, comments, "플랜댓글 조회성공").sendResponse();
@@ -58,7 +58,7 @@ public class CommentService {
         return new StatusCode(HttpStatus.OK, comments, "관광지댓글 조회성공").sendResponse();
     }
 
-    public ResponseEntity getMyComments(Users user) { // 내가 쓴 댓글 목록 (관광지+플랜 합쳐서)
+    public ResponseEntity<?> getMyComments(Users user) { // 내가 쓴 댓글 목록 (관광지+플랜 합쳐서)
         List<Object> comments = new ArrayList<>();
         comments.addAll(tourCommentRepository.findByUserOrderByDateDesc(user));
         comments.addAll(planCommentRepository.findByUserOrderByDateDesc(user));

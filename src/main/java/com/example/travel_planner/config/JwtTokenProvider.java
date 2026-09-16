@@ -57,7 +57,6 @@ public class JwtTokenProvider {
                     .signWith(SignatureAlgorithm.HS256, JWT_SECRET_ACCESS.getBytes()) // 사용할 암호화 알고리즘, signature에 들어갈 secret 값 세팅
                     .compact();
         } catch (Exception e) {
-            System.out.println(e);
             result.put("access_token", null);
             return result;
         }
@@ -72,30 +71,6 @@ public class JwtTokenProvider {
             Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_REFRESH.getBytes()).parseClaimsJws(token).getBody();
             return (String) claims.get("sub");
         } catch (Exception e) {
-            System.out.println(e);
-            return null;
-        }
-    }
-
-    // 토큰이 만료가 되었는지 안됐는지 확인하는 함수
-    public boolean validateAccessToken(String token) {
-        try {
-            Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_ACCESS.getBytes()).parseClaimsJws(token).getBody();
-            return true;
-        } catch (Exception e) {
-            System.out.println(e);
-        }
-        return false;
-    }
-
-    // 토큰 안에 있는 사용자의 이메일을 주는 함수
-    public String getUserEmailFromToken(String token){
-        try {
-            Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_ACCESS.getBytes()).parseClaimsJws(token).getBody();
-            System.out.println((String) claims.get("sub"));
-            return (String) claims.get("sub");
-        } catch (Exception e) {
-            System.out.println(e);
             return null;
         }
     }
@@ -116,7 +91,6 @@ public class JwtTokenProvider {
             Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_RESET.getBytes()).parseClaimsJws(token).getBody();
             return (String) claims.get("sub");
         } catch (Exception e) {
-            System.out.println(e);
             return null;
         }
     }

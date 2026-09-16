@@ -1,8 +1,9 @@
 package com.example.travel_planner.controller;
 
-import com.example.travel_planner.config.JwtTokenProvider;
+import com.example.travel_planner.config.CurrentUser;
 import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.config.Views;
+import com.example.travel_planner.entity.Users;
 import com.example.travel_planner.service.CommentService;
 import com.example.travel_planner.service.LikeService;
 import com.example.travel_planner.service.PasswordResetService;
@@ -31,8 +32,6 @@ public class Controller {
     private CommentService commentService;
     @Autowired
     private PasswordResetService passwordResetService;
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
 
     @GetMapping("/kakaoLogin")
     public ResponseEntity kakaoLogin(@RequestParam String token) {
@@ -52,21 +51,21 @@ public class Controller {
     // 본인 계정 조회 - 연락처/생년월일/주소 등 전체 정보를 내려줘야 하므로 Owner 뷰
     @JsonView(Views.Owner.class)
     @GetMapping("/getUserInfo")
-    public ResponseEntity getUserInfo(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        return userService.getUserInfo(token);
+    public ResponseEntity getUserInfo(@CurrentUser Users user) {
+        return userService.getUserInfo(user);
     }
     @PostMapping("/getUserUpdatePw")
-    public ResponseEntity getUserUpdatePw(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
-        return userService.getUserUpdatePw(token, data);
+    public ResponseEntity getUserUpdatePw(@CurrentUser Users user, @RequestBody Map<String, String> data){
+        return userService.getUserUpdatePw(user, data);
     }
 
     @PostMapping("/getUserUpdate")
-    public ResponseEntity getUserUpdate(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data) {
-       return userService.getUserUpdate(token, data);
+    public ResponseEntity getUserUpdate(@CurrentUser Users user, @RequestBody Map<String, String> data) {
+       return userService.getUserUpdate(user, data);
     }
     @DeleteMapping("/userDelete")
-    public ResponseEntity userDelete(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
-        return userService.userDelete(token);
+    public ResponseEntity userDelete(@CurrentUser Users user){
+        return userService.userDelete(user);
     }
 
     // Map으로 받아 이메일/비밀번호/이름/연락처/생년월일/프로필사진만 서비스에서 골라 쓴다.
@@ -76,23 +75,14 @@ public class Controller {
         return userService.register(data);
     }
 
-    @PostMapping("/tokenAuth") // 그저 테스트
-    public ResponseEntity tokenAuth(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        if(jwtTokenProvider.validateAccessToken(token.split(" ")[1])){
-            return new StatusCode(HttpStatus.OK, "인증 성공").sendResponse();
-        }else{
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
-    }
-
     @PostMapping("/getTokenUsedRefreshToken")
     public ResponseEntity getTokenUsedRefreshToken(@RequestBody Map<String, String> data){
         return userService.getTokenUsedRefreshToken(data);
     }
 
     @PostMapping("/uploadFile")
-    public ResponseEntity uploadFile(@RequestParam("file") MultipartFile multipartFile, @RequestHeader(HttpHeaders.AUTHORIZATION) String token){
-        return userService.uploadFile(multipartFile, token);
+    public ResponseEntity uploadFile(@RequestParam("file") MultipartFile multipartFile, @CurrentUser Users user){
+        return userService.uploadFile(multipartFile, user);
     }
 
     @GetMapping(value="/image/view", produces= MediaType.IMAGE_PNG_VALUE)
@@ -118,19 +108,19 @@ public class Controller {
 
     @JsonView(Views.Public.class)
     @PostMapping("/getLikes")
-    public ResponseEntity getLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
-        return likeService.getLikes(token);
+    public ResponseEntity getLikes(@CurrentUser Users user){
+        return likeService.getLikes(user);
     }
 
     @PostMapping("/addLikes")
-    public ResponseEntity addLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
-        return likeService.addLikes(token, data);
+    public ResponseEntity addLikes(@CurrentUser Users user, @RequestBody Map<String, String> data){
+        return likeService.addLikes(user, data);
     }
 
     // type: "T"(관광지) 또는 "P"(플랜) - 좋아요 대상 id가 두 테이블에서 겹칠 수 있어 구분이 필요하다.
     @DeleteMapping("/removeLikes/{id}")
-    public ResponseEntity removeLikes(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id, @RequestParam(defaultValue = "T") String type){
-        return likeService.removeLikes(token, id, type);
+    public ResponseEntity removeLikes(@CurrentUser Users user, @PathVariable String id, @RequestParam(defaultValue = "T") String type){
+        return likeService.removeLikes(user, id, type);
     }
 
     @GetMapping("/getLikeCount/{id}")
@@ -140,8 +130,8 @@ public class Controller {
 
     @JsonView(Views.Public.class)
     @PostMapping("/addComment")
-    public ResponseEntity addComment(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
-        return commentService.addComment(token, data);
+    public ResponseEntity addComment(@CurrentUser Users user, @RequestBody Map<String, String> data){
+        return commentService.addComment(user, data);
     }
 
     // type: "T"(관광지) 또는 "P"(플랜) - id가 두 테이블에서 겹칠 수 있어 구분이 필요하다.
@@ -153,44 +143,44 @@ public class Controller {
 
     @JsonView(Views.Public.class)
     @GetMapping("/getMyComments")
-    public ResponseEntity getMyComments(@RequestHeader(HttpHeaders.AUTHORIZATION) String token){
-        return commentService.getMyComments(token);
+    public ResponseEntity getMyComments(@CurrentUser Users user){
+        return commentService.getMyComments(user);
     }
     @PostMapping("/createPlan")
-    public ResponseEntity createPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> plan) {
-        return planService.createPlan(token, plan);
+    public ResponseEntity createPlan(@CurrentUser Users user, @RequestBody Map<String, String> plan) {
+        return planService.createPlan(user, plan);
     }
 
     @JsonView(Views.Public.class)
     @GetMapping("/getUserPlan")
-    public ResponseEntity getUserPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        return planService.getUserPlan(token);
+    public ResponseEntity getUserPlan(@CurrentUser Users user) {
+        return planService.getUserPlan(user);
     }
 
     @PutMapping("/updateSharePlan")
-    public ResponseEntity updateSharePlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
-        return planService.updateSharePlan(token, data);
+    public ResponseEntity updateSharePlan(@CurrentUser Users user, @RequestBody Map<String, String> data){
+        return planService.updateSharePlan(user, data);
     }
 
     @PutMapping("updatePlan")
-    public ResponseEntity updatePlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @RequestBody Map<String, String> data){
-        return planService.updatePlan(token, data);
+    public ResponseEntity updatePlan(@CurrentUser Users user, @RequestBody Map<String, String> data){
+        return planService.updatePlan(user, data);
     }
 
     @DeleteMapping(value = "/deleteUserPlan/{id}")
-    public ResponseEntity deleteUserPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id){
-        return planService.deleteUserPlan(token, id);
+    public ResponseEntity deleteUserPlan(@CurrentUser Users user, @PathVariable String id){
+        return planService.deleteUserPlan(user, id);
     }
     @JsonView(Views.Public.class)
     @GetMapping("/getUserPlanById/{id}")
-    public ResponseEntity getUserPlanById(@RequestHeader(HttpHeaders.AUTHORIZATION) String token, @PathVariable String id){
-        return planService.getUserPlanById(token, id);
+    public ResponseEntity getUserPlanById(@CurrentUser Users user, @PathVariable String id){
+        return planService.getUserPlanById(user, id);
     }
 
     @JsonView(Views.Public.class)
     @GetMapping("/getShareMyPlan")
-    public ResponseEntity getShareMyPlan(@RequestHeader(HttpHeaders.AUTHORIZATION) String token) {
-        return planService.getShareMyPlan(token);
+    public ResponseEntity getShareMyPlan(@CurrentUser Users user) {
+        return planService.getShareMyPlan(user);
     }
 
     @JsonView(Views.Public.class)

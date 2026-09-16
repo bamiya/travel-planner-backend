@@ -1,15 +1,14 @@
 package com.example.travel_planner.service;
 
-import com.example.travel_planner.config.JwtTokenProvider;
 import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.entity.PlanLike;
 import com.example.travel_planner.entity.Plans;
+import com.example.travel_planner.entity.TargetType;
 import com.example.travel_planner.entity.TourLike;
 import com.example.travel_planner.entity.Users;
 import com.example.travel_planner.repository.PlanLikeRepository;
 import com.example.travel_planner.repository.PlanRepository;
 import com.example.travel_planner.repository.TourLikeRepository;
-import com.example.travel_planner.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,18 +27,9 @@ public class LikeService {
     @Autowired
     private PlanLikeRepository planLikeRepository;
     @Autowired
-    private UserRepository userRepository;
-    @Autowired
     private PlanRepository planRepository;
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
 
-    public ResponseEntity getLikes(String token) {
-        String tokenFilter = token.split(" ")[1];
-        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
-        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+    public ResponseEntity getLikes(Users user) {
         // 프론트는 관광지 좋아요/플랜 좋아요를 한 배열로 받아 type("T"/"P")으로 걸러 쓴다.
         List<Object> likes = new ArrayList<>();
         likes.addAll(tourLikeRepository.findByUser(user));
@@ -48,16 +38,11 @@ public class LikeService {
     }
 
     @Transactional
-    public ResponseEntity addLikes(String token, Map<String, String> data) {
-        String tokenFilter = token.split(" ")[1];
-        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료된 토큰").sendResponse();
-        }
-        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
+    public ResponseEntity addLikes(Users user, Map<String, String> data) {
         String id = data.get("id");
-        String type = data.get("type");
+        TargetType type = TargetType.valueOf(data.getOrDefault("type", "T"));
 
-        if ("P".equals(type)) {
+        if (type == TargetType.P) {
             Optional<Plans> plan = planRepository.findById(Long.valueOf(id));
             if (plan.isEmpty()) {
                 return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
@@ -74,14 +59,8 @@ public class LikeService {
     }
 
     @Transactional
-    public ResponseEntity removeLikes(String token, String id, String type) {
-        String tokenFilter = token.split(" ")[1];
-        if (!jwtTokenProvider.validateAccessToken(tokenFilter)) {
-            return new StatusCode(HttpStatus.UNAUTHORIZED, "토큰 만료").sendResponse();
-        }
-        Users user = userRepository.findByEmail(jwtTokenProvider.getUserEmailFromToken(tokenFilter)).orElseThrow();
-
-        if ("P".equals(type)) {
+    public ResponseEntity removeLikes(Users user, String id, String type) {
+        if (TargetType.valueOf(type) == TargetType.P) {
             planLikeRepository.findByUserAndPlanId(user, Long.valueOf(id)).ifPresent(planLikeRepository::delete);
         } else {
             tourLikeRepository.findByUserAndContentid(user, id).ifPresent(tourLikeRepository::delete);

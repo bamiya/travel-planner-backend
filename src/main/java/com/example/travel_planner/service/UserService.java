@@ -255,7 +255,8 @@ public class UserService {
             return new StatusCode(HttpStatus.INTERNAL_SERVER_ERROR, "업로드 실패").sendResponse();
         }
 
-        return new StatusCode(HttpStatus.OK, "업로드 성공").sendResponse();
+        // 프론트가 재로그인 없이 즉시 화면에 반영할 수 있도록 새 파일명을 응답에 담아준다.
+        return new StatusCode(HttpStatus.OK, storedFileName, "업로드 성공").sendResponse();
     }
 
     // 비밀번호 찾기: 반드시 이메일 인증코드 확인 후 발급된 resetToken을 통해서만 변경 가능

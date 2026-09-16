@@ -2,7 +2,9 @@ package com.example.travel_planner.service;
 
 import com.example.travel_planner.config.KakaoProvider;
 import com.example.travel_planner.config.StatusCode;
+import com.example.travel_planner.entity.PersonalInfoHistory;
 import com.example.travel_planner.entity.Users;
+import com.example.travel_planner.repository.PersonalInfoHistoryRepository;
 import com.example.travel_planner.repository.PlanCommentRepository;
 import com.example.travel_planner.repository.PlanLikeRepository;
 import com.example.travel_planner.repository.PlanRepository;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.HttpServletRequest;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +54,12 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private PersonalInfoHistoryRepository personalInfoHistoryRepository;
+
+    @Autowired
+    private HttpServletRequest request;
+
     @Value("${app.upload.dir}")
     private String uploadDir;
 
@@ -60,6 +69,26 @@ public class UserService {
     private String kakaoClientSecret;
     @Value("${app.kakao.redirect-uri}")
     private String kakaoRedirectUri;
+
+    // 개인정보의 안전성 확보조치 기준 제8조(접속기록 보관) 대응용 - 실제 변경된 값은
+    // 남기지 않고(최소수집), 언제/누가/무슨 처리를 했는지만 남긴다.
+    private void logPersonalInfoAction(String email, PersonalInfoHistory.ActionType actionType) {
+        personalInfoHistoryRepository.save(
+                PersonalInfoHistory.builder()
+                        .email(email)
+                        .actionType(actionType)
+                        .ipAddress(getClientIp())
+                        .build()
+        );
+    }
+
+    private String getClientIp() {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
 
     public ResponseEntity<?> getUserInfoKakao(String code) {
         KakaoProvider kakaoProvider = new KakaoProvider();
@@ -119,12 +148,14 @@ public class UserService {
         if (data.containsKey("address1")) user.setAddress1(data.get("address1"));
         if (data.containsKey("address2")) user.setAddress2(data.get("address2"));
         userRepository.save(user);
+        logPersonalInfoAction(user.getEmail(), PersonalInfoHistory.ActionType.UPDATE_INFO);
 
         return new StatusCode(HttpStatus.OK, "회원수정성공").sendResponse();
     }
 
     @Transactional
     public ResponseEntity<?> userDelete(Users user){
+        String email = user.getEmail(); // 탈퇴 후에도 이력에 남겨야 하므로 삭제 전에 스냅샷
         List<Plans> myPlans = planRepository.findByUserOrderByIdDesc(user);
 
         tourLikeRepository.deleteByUser(user);
@@ -138,6 +169,7 @@ public class UserService {
         planRepository.deleteAll(myPlans); // Plans -> PlanDay -> PlanStop cascade
 
         userRepository.delete(user);
+        logPersonalInfoAction(email, PersonalInfoHistory.ActionType.WITHDRAW);
         return new StatusCode(HttpStatus.OK, "회원탈퇴성공").sendResponse();
     }
 
@@ -149,6 +181,7 @@ public class UserService {
         if (dbPw != null && passwordEncoder.matches(pw, dbPw)) {
             user.setPassword(passwordEncoder.encode(data.get("newPw")));
             userRepository.save(user);
+            logPersonalInfoAction(user.getEmail(), PersonalInfoHistory.ActionType.UPDATE_PASSWORD);
             return new StatusCode(HttpStatus.OK, "비밀번호변경 성공").sendResponse();
         } else {
             return new StatusCode(HttpStatus.BAD_REQUEST, "비밀번호 불일치").sendResponse();
@@ -175,6 +208,7 @@ public class UserService {
                     .provider(Users.Provider.LOCAL)
                     .build();
             userRepository.save(hashedUser);
+            logPersonalInfoAction(email, PersonalInfoHistory.ActionType.SIGN_UP);
             return new StatusCode(HttpStatus.OK, "회원 가입이 완료되었습니다!").sendResponse();
         } catch (Exception e) {
             return new StatusCode(HttpStatus.BAD_REQUEST, "서버에 에러가 발생했습니다.").sendResponse();
@@ -237,6 +271,7 @@ public class UserService {
             Users user = resultEmail.get();
             user.setPassword(passwordEncoder.encode(data.get("pw")));
             userRepository.save(user);
+            logPersonalInfoAction(user.getEmail(), PersonalInfoHistory.ActionType.UPDATE_PASSWORD);
             return new StatusCode(HttpStatus.OK, "비밀번호 변경").sendResponse();
 
         } else {

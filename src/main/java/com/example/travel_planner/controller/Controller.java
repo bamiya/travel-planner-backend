@@ -75,9 +75,15 @@ public class Controller {
         return userService.register(data);
     }
 
+    // 리프레시 토큰은 요청 본문이 아니라 httpOnly 쿠키로 들어온다 (서비스 레이어에서 읽는다).
     @PostMapping("/getTokenUsedRefreshToken")
-    public ResponseEntity<?> getTokenUsedRefreshToken(@RequestBody Map<String, String> data){
-        return userService.getTokenUsedRefreshToken(data);
+    public ResponseEntity<?> getTokenUsedRefreshToken(){
+        return userService.getTokenUsedRefreshToken();
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(){
+        return userService.logout();
     }
 
     @PostMapping("/uploadFile")

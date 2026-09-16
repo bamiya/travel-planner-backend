@@ -24,7 +24,11 @@ public class WebConfig implements WebMvcConfigurer {
                         HttpMethod.HEAD.name(),
                         HttpMethod.POST.name(),
                         HttpMethod.PUT.name(),
-                        HttpMethod.DELETE.name());
+                        HttpMethod.DELETE.name())
+                // 리프레시 토큰을 httpOnly 쿠키로 주고받으려면 브라우저가 쿠키를 실어보내야
+                // 하는데, 그러려면 요청 쪽(withCredentials)과 응답 쪽(이 설정) 둘 다 허용해야 한다.
+                // allowedOrigins가 "*"가 아니라 명시적 목록이라 credentials와 같이 써도 안전하다.
+                .allowCredentials(true);
     }
 
     @Bean

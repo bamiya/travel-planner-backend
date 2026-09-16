@@ -1,13 +1,16 @@
 package com.example.travel_planner.service;
 
 import com.example.travel_planner.config.KakaoProvider;
+import com.example.travel_planner.config.LoginAttemptService;
 import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.entity.PersonalInfoHistory;
+import com.example.travel_planner.entity.RefreshToken;
 import com.example.travel_planner.entity.Users;
 import com.example.travel_planner.repository.PersonalInfoHistoryRepository;
 import com.example.travel_planner.repository.PlanCommentRepository;
 import com.example.travel_planner.repository.PlanLikeRepository;
 import com.example.travel_planner.repository.PlanRepository;
+import com.example.travel_planner.repository.RefreshTokenRepository;
 import com.example.travel_planner.repository.TourCommentRepository;
 import com.example.travel_planner.repository.TourLikeRepository;
 import com.example.travel_planner.repository.UserRepository;
@@ -23,11 +26,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -58,7 +66,24 @@ public class UserService {
     private PersonalInfoHistoryRepository personalInfoHistoryRepository;
 
     @Autowired
+    private RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    private LoginAttemptService loginAttemptService;
+
+    @Autowired
     private HttpServletRequest request;
+
+    @Autowired
+    private HttpServletResponse response;
+
+    @Value("${app.cookie.secure}")
+    private boolean cookieSecure;
+
+    // JwtTokenProvider와 만료시간 상수가 겹치지만, 그쪽은 JWT 서명에만 관여하고 DB 기록의
+    // 만료시각 계산은 서비스 레이어 책임이라 별도로 둔다.
+    private static final long REFRESH_TOKEN_VALIDITY_MS = 604800000L; // 7일
+    private static final String REFRESH_COOKIE_NAME = "refresh_token";
 
     @Value("${app.upload.dir}")
     private String uploadDir;
@@ -90,6 +115,63 @@ public class UserService {
         return request.getRemoteAddr();
     }
 
+    // 리프레시 토큰 원문은 저장하지 않고 해시만 저장한다 (DB 유출 시에도 토큰 재사용 방지).
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes());
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e); // SHA-256은 모든 JVM에 기본 내장되어 있어 실제로는 발생하지 않는다
+        }
+    }
+
+    // 로그인/토큰재발급 시 발급한 리프레시 토큰을 서버 기록에 남긴다 - 이 기록이 있는
+    // 토큰만 재발급에 사용할 수 있다 (로그아웃/재발급 시 폐기하면 그 즉시 무효가 된다).
+    private void saveRefreshToken(Users user, String rawRefreshToken) {
+        refreshTokenRepository.save(
+                RefreshToken.builder()
+                        .user(user)
+                        .tokenHash(hashToken(rawRefreshToken))
+                        .expiresAt(LocalDateTime.now().plusSeconds(REFRESH_TOKEN_VALIDITY_MS / 1000))
+                        .build()
+        );
+    }
+
+    // 리프레시 토큰을 JS에서 읽을 수 없는 httpOnly 쿠키로 내려준다 - localStorage에 두면
+    // XSS 한 번으로 그대로 탈취당할 수 있는데, httpOnly 쿠키는 스크립트가 접근할 수 없다.
+    private void setRefreshTokenCookie(String rawRefreshToken) {
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, rawRefreshToken)
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(REFRESH_TOKEN_VALIDITY_MS / 1000)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private void clearRefreshTokenCookie() {
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(0)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private String getRefreshTokenFromCookie() {
+        if (request.getCookies() == null) return null;
+        for (Cookie c : request.getCookies()) {
+            if (REFRESH_COOKIE_NAME.equals(c.getName())) return c.getValue();
+        }
+        return null;
+    }
+
     public ResponseEntity<?> getUserInfoKakao(String code) {
         KakaoProvider kakaoProvider = new KakaoProvider();
 
@@ -104,6 +186,8 @@ public class UserService {
             Optional<Users> resultEmail = email != null ? userRepository.findByEmail(email) : Optional.empty();
             if (resultEmail.isPresent()) {
                 Map<String, String> tokens = jwtTokenProvider.generateToken(resultEmail.get().getEmail());
+                saveRefreshToken(resultEmail.get(), tokens.get("refresh_token"));
+                setRefreshTokenCookie(tokens.remove("refresh_token"));
                 tokens.put("isUser", "Y");
                 tokens.put("profileImg", resultEmail.get().getProfileImg());
                 return new StatusCode(HttpStatus.OK, tokens, "로그인 성공!").sendResponse();
@@ -115,15 +199,27 @@ public class UserService {
     }
 
     public ResponseEntity<?> login(Map<String, String> data) {
-        Optional<Users> resultEmail = userRepository.findByEmail(data.get("email"));
+        String email = data.get("email");
+
+        if (loginAttemptService.isLocked(email)) {
+            long remain = loginAttemptService.getLockRemainingSeconds(email);
+            return new StatusCode(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 너무 많습니다. " + remain + "초 후 다시 시도해주세요.").sendResponse();
+        }
+
+        Optional<Users> resultEmail = userRepository.findByEmail(email);
         if (resultEmail.isPresent()) {
             if (resultEmail.get().getPassword() == null || !passwordEncoder.matches(data.get("pw"), resultEmail.get().getPassword())) {
+                loginAttemptService.loginFailed(email);
                 return new StatusCode(HttpStatus.NOT_FOUND, "로그인 실패! 비밀번호를 확인해주세요.").sendResponse();
             }
+            loginAttemptService.loginSucceeded(email);
             Map<String, String> tokens = jwtTokenProvider.generateToken(resultEmail.get().getEmail());
+            saveRefreshToken(resultEmail.get(), tokens.get("refresh_token"));
+            setRefreshTokenCookie(tokens.remove("refresh_token"));
             tokens.put("profileImg", resultEmail.get().getProfileImg());
             return new StatusCode(HttpStatus.OK, tokens, "로그인 성공!").sendResponse();
         }
+        loginAttemptService.loginFailed(email); // 존재하지 않는 이메일도 시도 횟수에 포함해 계정 존재 여부가 타이밍으로 드러나지 않게 한다
         return new StatusCode(HttpStatus.NOT_FOUND, "로그인 실패! 아이디 또는 비밀번호를 확인해주세요.").sendResponse();
     }
 
@@ -162,6 +258,7 @@ public class UserService {
         planLikeRepository.deleteByUser(user);
         tourCommentRepository.deleteByUser(user);
         planCommentRepository.deleteByUser(user);
+        refreshTokenRepository.deleteByUser(user);
 
         // 내가 만든 플랜에 남의 좋아요/댓글이 달려있을 수 있으니 그것도 정리
         planLikeRepository.deleteByPlanIn(myPlans);
@@ -215,16 +312,41 @@ public class UserService {
         }
     }
 
-    public ResponseEntity<?> getTokenUsedRefreshToken(Map<String, String> data){
-        Map<String, String> token = jwtTokenProvider.generateAccessToken(data.get("refreshToken"));
-
-        if(token.get("access_token") != null){ // 성공적으로 재발급이 됨
-            String email = jwtTokenProvider.getEmailFromRefreshToken(data.get("refreshToken"));
-            userRepository.findByEmail(email).ifPresent(u -> token.put("profileImg", u.getProfileImg()));
-            return new StatusCode(HttpStatus.OK, token, "액세스 토큰 재발급 성공").sendResponse();
-        }else{
-            return new StatusCode(HttpStatus.INTERNAL_SERVER_ERROR, "리프레쉬 토큰이 만료되었거나, 알 수 없는 에러").sendResponse();
+    @Transactional
+    public ResponseEntity<?> getTokenUsedRefreshToken(){
+        String incomingToken = getRefreshTokenFromCookie();
+        String email = incomingToken != null ? jwtTokenProvider.getEmailFromRefreshToken(incomingToken) : null;
+        if (email == null) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "리프레쉬 토큰이 만료되었거나, 알 수 없는 에러").sendResponse();
         }
+
+        // 서명/만료가 유효해도, 서버 기록에 없는(이미 재발급으로 폐기됐거나 로그아웃된)
+        // 토큰이면 거부한다 - 이게 없으면 탈취된 토큰이 만료 전까지 계속 재사용될 수 있다.
+        Optional<RefreshToken> stored = refreshTokenRepository.findByTokenHash(hashToken(incomingToken));
+        if (stored.isEmpty()) {
+            return new StatusCode(HttpStatus.UNAUTHORIZED, "만료되었거나 무효화된 세션입니다. 다시 로그인해주세요.").sendResponse();
+        }
+        Users user = stored.get().getUser();
+        refreshTokenRepository.delete(stored.get()); // rotation: 쓰고 난 리프레시 토큰은 즉시 폐기
+
+        Map<String, String> tokens = jwtTokenProvider.generateToken(email);
+        saveRefreshToken(user, tokens.get("refresh_token"));
+        setRefreshTokenCookie(tokens.remove("refresh_token"));
+        tokens.put("profileImg", user.getProfileImg());
+        return new StatusCode(HttpStatus.OK, tokens, "액세스 토큰 재발급 성공").sendResponse();
+    }
+
+    // 로그아웃: 쿠키로 들고 있는 리프레시 토큰을 서버 기록에서 지우고, 브라우저의 쿠키도
+    // 지운다. 액세스 토큰이 이미 만료된 상태에서도 호출할 수 있어야 하므로 인증을 요구하지
+    // 않는다 - 어차피 자기 것이 아닌 토큰 해시로는 아무 것도 지울 수 없다.
+    @Transactional
+    public ResponseEntity<?> logout() {
+        String refreshToken = getRefreshTokenFromCookie();
+        if (refreshToken != null) {
+            refreshTokenRepository.deleteByTokenHash(hashToken(refreshToken));
+        }
+        clearRefreshTokenCookie();
+        return new StatusCode(HttpStatus.OK, "로그아웃 되었습니다.").sendResponse();
     }
 
     @Transactional

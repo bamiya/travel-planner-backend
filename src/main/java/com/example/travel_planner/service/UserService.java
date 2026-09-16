@@ -142,11 +142,13 @@ public class UserService {
 
     // 리프레시 토큰을 JS에서 읽을 수 없는 httpOnly 쿠키로 내려준다 - localStorage에 두면
     // XSS 한 번으로 그대로 탈취당할 수 있는데, httpOnly 쿠키는 스크립트가 접근할 수 없다.
+    // SameSite=Strict: 이 쿠키는 우리 프론트가 fetch/axios로만 쓰고, 다른 사이트 링크를
+    // 타고 들어올 때(top-level navigation) 실려야 할 이유가 없다 - CSRF 표면을 최소화한다.
     private void setRefreshTokenCookie(String rawRefreshToken) {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, rawRefreshToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite("Lax")
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(REFRESH_TOKEN_VALIDITY_MS / 1000)
                 .build();
@@ -157,7 +159,7 @@ public class UserService {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite("Lax")
+                .sameSite("Strict")
                 .path("/")
                 .maxAge(0)
                 .build();

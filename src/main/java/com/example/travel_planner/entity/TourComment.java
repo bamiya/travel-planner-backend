@@ -18,8 +18,10 @@ import java.time.LocalDate;
 public class TourComment {
     // 프론트가 "id"를 댓글 자신의 PK가 아니라 "댓글이 달린 대상의 id"라는 의미로 써서
     // (예: like.filter(e => e.id === tour.contentid)), PK는 idx로 이름을 분리한다.
+    // 댓글 삭제(관리자용)가 이 값으로 대상을 찾으니 @JsonView를 명시해서 응답에 꼭 포함시킨다.
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @JsonView(Views.Public.class)
     private Long idx;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -35,6 +37,11 @@ public class TourComment {
     @Column(columnDefinition = "longtext", nullable = false)
     @JsonView(Views.Public.class)
     private String content;
+
+    // 1~5 별점 - 좋아요와 별개로, 댓글 작성 시 같이 남기는 평가. 기존 댓글엔 없을 수 있어
+    // nullable로 두고, 새 댓글은 서비스 레이어에서 1~5 범위인지 검증한다.
+    @JsonView(Views.Public.class)
+    private Integer rating;
 
     @Column(nullable = false)
     @JsonView(Views.Public.class)

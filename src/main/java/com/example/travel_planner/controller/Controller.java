@@ -185,6 +185,11 @@ public class Controller {
         return commentService.getComment(id, type);
     }
 
+    @DeleteMapping("/deleteComment/{id}")
+    public ResponseEntity<?> deleteComment(@CurrentUser Users user, @PathVariable String id, @RequestParam(defaultValue = "T") String type){
+        return commentService.deleteComment(user, id, type);
+    }
+
     @JsonView(Views.Public.class)
     @GetMapping("/getMyComments")
     public ResponseEntity<?> getMyComments(@CurrentUser Users user){

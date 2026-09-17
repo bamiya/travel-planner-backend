@@ -35,18 +35,49 @@ public class CommentService {
         String id = data.get("id");
         TargetType type = TargetType.valueOf(data.getOrDefault("type", "T"));
 
+        Integer rating = null;
+        if (data.get("rating") != null) {
+            try {
+                rating = Integer.valueOf(data.get("rating"));
+            } catch (NumberFormatException e) {
+                return new StatusCode(HttpStatus.BAD_REQUEST, "별점은 숫자여야 합니다.").sendResponse();
+            }
+            if (rating < 1 || rating > 5) {
+                return new StatusCode(HttpStatus.BAD_REQUEST, "별점은 1~5 사이여야 합니다.").sendResponse();
+            }
+        }
+
         if (type == TargetType.P) {
             Optional<Plans> plan = planRepository.findById(Long.valueOf(id));
             if (plan.isEmpty()) {
                 return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
             }
             planCommentRepository.save(PlanComment.builder()
-                    .user(user).plan(plan.get()).content(data.get("content")).date(LocalDate.now()).build());
+                    .user(user).plan(plan.get()).content(data.get("content")).rating(rating).date(LocalDate.now()).build());
         } else {
             tourCommentRepository.save(TourComment.builder()
-                    .user(user).contentid(id).content(data.get("content")).date(LocalDate.now()).build());
+                    .user(user).contentid(id).content(data.get("content")).rating(rating).date(LocalDate.now()).build());
         }
         return new StatusCode(HttpStatus.OK, "댓글 추가 성공").sendResponse();
+    }
+
+    @Transactional
+    public ResponseEntity<?> deleteComment(Users user, String id, String type) {
+        if (user.getRole() != Users.Role.ADMIN) {
+            return new StatusCode(HttpStatus.FORBIDDEN, "관리자만 댓글을 삭제할 수 있습니다.").sendResponse();
+        }
+        if (TargetType.valueOf(type) == TargetType.P) {
+            if (planCommentRepository.findById(Long.valueOf(id)).isEmpty()) {
+                return new StatusCode(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.").sendResponse();
+            }
+            planCommentRepository.deleteById(Long.valueOf(id));
+        } else {
+            if (tourCommentRepository.findById(Long.valueOf(id)).isEmpty()) {
+                return new StatusCode(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.").sendResponse();
+            }
+            tourCommentRepository.deleteById(Long.valueOf(id));
+        }
+        return new StatusCode(HttpStatus.OK, "댓글이 삭제되었습니다.").sendResponse();
     }
 
     public ResponseEntity<?> getComment(String id, String type) {

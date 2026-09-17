@@ -80,6 +80,13 @@ public class UserService {
     @Value("${app.cookie.secure}")
     private boolean cookieSecure;
 
+    // 기본은 Strict(CSRF 표면 최소화)지만, 프론트/백엔드가 서로 다른 도메인에 떠 있는
+    // 테스트 환경(예: ngrok 터널 두 개)에서는 Strict/Lax 둘 다 쿠키가 아예 안 실려서
+    // 로그인 유지가 깨진다. 그런 환경에서만 배포 시 app.cookie.same-site=None으로 바꿔준다
+    // (None은 Secure=true 필수라 cookieSecure도 같이 켜야 한다).
+    @Value("${app.cookie.same-site}")
+    private String cookieSameSite;
+
     // JwtTokenProvider와 만료시간 상수가 겹치지만, 그쪽은 JWT 서명에만 관여하고 DB 기록의
     // 만료시각 계산은 서비스 레이어 책임이라 별도로 둔다.
     private static final long REFRESH_TOKEN_VALIDITY_MS = 604800000L; // 7일
@@ -148,7 +155,7 @@ public class UserService {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, rawRefreshToken)
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite("Strict")
+                .sameSite(cookieSameSite)
                 .path("/")
                 .maxAge(REFRESH_TOKEN_VALIDITY_MS / 1000)
                 .build();
@@ -159,7 +166,7 @@ public class UserService {
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
                 .httpOnly(true)
                 .secure(cookieSecure)
-                .sameSite("Strict")
+                .sameSite(cookieSameSite)
                 .path("/")
                 .maxAge(0)
                 .build();

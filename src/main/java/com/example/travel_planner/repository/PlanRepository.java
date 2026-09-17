@@ -21,4 +21,6 @@ public interface PlanRepository extends JpaRepository<Plans, Long> {
     Page<Plans> findBySharedTrue(Pageable pageable);
 
     long countBySharedTrue();
+
+    long countByUserAndSharedTrue(Users user);
 }

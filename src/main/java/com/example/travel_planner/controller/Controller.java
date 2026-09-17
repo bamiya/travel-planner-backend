@@ -86,6 +86,12 @@ public class Controller {
     public ResponseEntity<?> getUserInfo(@CurrentUser Users user) {
         return userService.getUserInfo(user);
     }
+    // 댓글/플랜 작성자 닉네임을 눌렀을 때 보여줄 미니 프로필 - 로그인 여부와 무관하게 누구나 조회 가능
+    @GetMapping("/getPublicProfile/{nickname}")
+    public ResponseEntity<?> getPublicProfile(@PathVariable String nickname) {
+        return userService.getPublicProfile(nickname);
+    }
+
     @PostMapping("/getUserUpdatePw")
     public ResponseEntity<?> getUserUpdatePw(@CurrentUser Users user, @RequestBody Map<String, String> data){
         return userService.getUserUpdatePw(user, data);

@@ -15,4 +15,6 @@ public interface PlanCommentRepository extends JpaRepository<PlanComment, Long> 
     void deleteByUser(Users user);
 
     void deleteByPlanIn(List<Plans> plans);
+
+    long countByUser(Users user);
 }

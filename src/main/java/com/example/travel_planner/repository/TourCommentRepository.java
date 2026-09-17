@@ -12,4 +12,6 @@ public interface TourCommentRepository extends JpaRepository<TourComment, Long> 
     List<TourComment> findByUserOrderByDateDesc(Users user);
 
     void deleteByUser(Users user);
+
+    long countByUser(Users user);
 }

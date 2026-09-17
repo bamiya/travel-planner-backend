@@ -238,6 +238,26 @@ public class UserService {
         return new StatusCode(HttpStatus.OK, user, "유저 정보 조회 성공").sendResponse();
     }
 
+    // 댓글 작성자 닉네임을 클릭했을 때 보여줄 간단한 공개 프로필 - 닉네임 외의 개인정보는
+    // 절대 포함하지 않는다(id/email 등은 애초에 Users 응답에서 Owner 뷰로만 나가지만,
+    // 여기서도 필요한 값만 직접 골라 응답한다).
+    public ResponseEntity<?> getPublicProfile(String nickname) {
+        Optional<Users> result = userRepository.findByNickname(nickname);
+        if (result.isEmpty()) {
+            return new StatusCode(HttpStatus.NOT_FOUND, "존재하지 않는 사용자입니다.").sendResponse();
+        }
+        Users user = result.get();
+        long planCount = planRepository.countByUserAndSharedTrue(user);
+        long commentCount = planCommentRepository.countByUser(user) + tourCommentRepository.countByUser(user);
+
+        Map<String, Object> profile = new java.util.HashMap<>();
+        profile.put("nickname", user.getDisplayNickname());
+        profile.put("profileImg", user.getProfileImg());
+        profile.put("planCount", planCount);
+        profile.put("commentCount", commentCount);
+        return new StatusCode(HttpStatus.OK, profile, "공개 프로필 조회 성공").sendResponse();
+    }
+
     @Transactional
     public ResponseEntity<?> getUserUpdate(Users user, Map<String, String> data) {
         user.setName(data.get("name"));

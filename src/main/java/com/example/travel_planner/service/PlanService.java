@@ -178,12 +178,19 @@ public class PlanService {
     }
 
     @Transactional
-    public ResponseEntity<?> getPlansById(String id) {
+    public ResponseEntity<?> getPlansById(String id, Users viewer) {
         Optional<Plans> plan = planRepository.findById(Long.valueOf(id));
         if (plan.isEmpty()) {
             return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
         }
+        boolean isOwner = viewer != null && plan.get().getUser().getId().equals(viewer.getId());
+        if (!plan.get().isShared() && !isOwner) {
+            // 비공개 플랜은 주인만 볼 수 있다 - id를 안다고(순번이라 추측 가능) 아무나
+            // 조회할 수 있으면 안 된다. 존재 여부 자체도 알려주지 않기 위해 NOT_FOUND로 통일.
+            return new StatusCode(HttpStatus.NOT_FOUND, "플랜을 찾을 수 없습니다.").sendResponse();
+        }
         plan.get().setLikeCount((int) planLikeRepository.countByPlanId(plan.get().getId()));
+        plan.get().setMine(isOwner);
         return new StatusCode(HttpStatus.OK, plan.get(), "단일 플랜 조회 성공").sendResponse();
     }
 

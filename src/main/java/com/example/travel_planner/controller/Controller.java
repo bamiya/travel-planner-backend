@@ -1,11 +1,13 @@
 package com.example.travel_planner.controller;
 
 import com.example.travel_planner.config.CurrentUser;
+import com.example.travel_planner.config.CurrentUserArgumentResolver;
 import com.example.travel_planner.config.StatusCode;
 import com.example.travel_planner.config.Views;
 import com.example.travel_planner.entity.Users;
 import com.example.travel_planner.service.CommentService;
 import com.example.travel_planner.service.LikeService;
+import com.example.travel_planner.service.NoticeService;
 import com.example.travel_planner.service.PasswordResetService;
 import com.example.travel_planner.service.PlanService;
 import com.example.travel_planner.service.UserService;
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -32,6 +35,35 @@ public class Controller {
     private CommentService commentService;
     @Autowired
     private PasswordResetService passwordResetService;
+    @Autowired
+    private CurrentUserArgumentResolver currentUserArgumentResolver;
+    @Autowired
+    private NoticeService noticeService;
+
+    @GetMapping("/getNotices")
+    public ResponseEntity<?> getNotices() {
+        return noticeService.getNotices();
+    }
+
+    @GetMapping("/getNoticeById/{id}")
+    public ResponseEntity<?> getNoticeById(@PathVariable String id) {
+        return noticeService.getNoticeById(id);
+    }
+
+    @PostMapping("/createNotice")
+    public ResponseEntity<?> createNotice(@CurrentUser Users user, @RequestBody Map<String, String> data) {
+        return noticeService.createNotice(user, data);
+    }
+
+    @PutMapping("/updateNotice")
+    public ResponseEntity<?> updateNotice(@CurrentUser Users user, @RequestBody Map<String, String> data) {
+        return noticeService.updateNotice(user, data);
+    }
+
+    @DeleteMapping("/deleteNotice/{id}")
+    public ResponseEntity<?> deleteNotice(@CurrentUser Users user, @PathVariable String id) {
+        return noticeService.deleteNotice(user, id);
+    }
 
     @GetMapping("/kakaoLogin")
     public ResponseEntity<?> kakaoLogin(@RequestParam String code) {
@@ -198,10 +230,14 @@ public class Controller {
     public ResponseEntity<?> getPlanWithPagination(@RequestParam String page, @RequestParam String size){
         return planService.getPlanWithPagination(page, size);}
 
+    // 공유 링크로 비회원도 볼 수 있어야 하는 화면이라 로그인을 강제하진 않지만, 비공개
+    // 플랜은 주인만 볼 수 있어야 한다 - 순번 id를 그냥 1,2,3... 넣어보면 아무 계정의
+    // 비공개 플랜이든 다 조회되던 문제(인가 누락)가 있어서 소유자/공유여부 체크를 추가했다.
     @JsonView(Views.Public.class)
     @GetMapping("/getPlansById/{id}")
-    public ResponseEntity<?> getPlansById(@PathVariable String id){
-        return planService.getPlansById(id);
+    public ResponseEntity<?> getPlansById(@PathVariable String id, HttpServletRequest request){
+        Users viewer = currentUserArgumentResolver.resolveOptional(request).orElse(null);
+        return planService.getPlansById(id, viewer);
     }
 
     // 토큰은 유효하지만(서명/만료 통과) 그 안의 이메일에 해당하는 회원이 DB에 없는 경우

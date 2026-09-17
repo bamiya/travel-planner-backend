@@ -15,6 +15,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 import javax.servlet.http.HttpServletRequest;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 // @CurrentUser Users user 파라미터를 만나면 Authorization 헤더의 액세스 토큰을
 // 검증하고 그 주인인 Users를 찾아 넘겨준다. 예전엔 서비스 메서드마다
@@ -56,5 +57,22 @@ public class CurrentUserArgumentResolver implements HandlerMethodArgumentResolve
         }
 
         return userRepository.findByEmail(email).orElseThrow();
+    }
+
+    // 비회원도 볼 수 있어야 하는 화면(예: 공유된 플랜 링크)에서, 로그인했으면 그 사용자를,
+    // 안 했거나 토큰이 없거나 유효하지 않으면 조용히 빈 값을 돌려준다 - @CurrentUser와 달리
+    // 여기선 "로그인 안 함"이 에러가 아니라 정상적인 케이스라서 예외를 던지지 않는다.
+    public Optional<Users> resolveOptional(HttpServletRequest request) {
+        String authHeader = request != null ? request.getHeader("Authorization") : null;
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return Optional.empty();
+        }
+        try {
+            String token = authHeader.substring("Bearer ".length());
+            Claims claims = Jwts.parser().setSigningKey(JWT_SECRET_ACCESS.getBytes()).parseClaimsJws(token).getBody();
+            return userRepository.findByEmail(claims.getSubject());
+        } catch (Exception e) {
+            return Optional.empty();
+        }
     }
 }

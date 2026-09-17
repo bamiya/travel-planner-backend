@@ -241,6 +241,7 @@ public class UserService {
     @Transactional
     public ResponseEntity<?> getUserUpdate(Users user, Map<String, String> data) {
         user.setName(data.get("name"));
+        if (data.containsKey("nickname")) user.setNickname(data.get("nickname"));
         user.setTel(data.get("tel"));
         if (data.containsKey("zipcode")) user.setZipcode(data.get("zipcode"));
         if (data.containsKey("address1")) user.setAddress1(data.get("address1"));
@@ -295,11 +296,19 @@ public class UserService {
             if (userRepository.findByEmail(email).isPresent()) {
                 return new StatusCode(HttpStatus.BAD_REQUEST, "이미 존재하는 이메일 입니다.").sendResponse();
             }
+            String nickname = data.get("nickname");
+            if (nickname == null || nickname.isBlank()) {
+                return new StatusCode(HttpStatus.BAD_REQUEST, "닉네임을 입력해주세요.").sendResponse();
+            }
+            if (userRepository.findByNickname(nickname).isPresent()) {
+                return new StatusCode(HttpStatus.BAD_REQUEST, "이미 사용 중인 닉네임입니다.").sendResponse();
+            }
 
             // 클라이언트가 보낼 수 있는 값 중 허용된 필드만 골라서 저장한다 (role 등은 절대 여기서 받지 않는다).
             Users hashedUser = Users.builder()
                     .email(email)
                     .name(data.get("name"))
+                    .nickname(nickname)
                     .birth(data.get("birth") != null ? java.time.LocalDate.parse(data.get("birth")) : null)
                     .password(passwordEncoder.encode(data.get("password")))
                     .tel(data.get("tel"))

@@ -72,6 +72,14 @@ public class Plans {
     @JsonView(Views.Public.class)
     private int likeCount;
 
+    // 작성자 email/id를 더 이상 응답에 안 내려주기 때문에(개인정보), 프론트가
+    // "내 플랜인지"를 직접 비교할 방법이 없다 - 서버가 미리 계산해서 내려준다.
+    @Setter
+    @Getter
+    @Transient
+    @JsonView(Views.Public.class)
+    private boolean mine;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

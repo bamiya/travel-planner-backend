@@ -181,8 +181,9 @@ public class Controller {
     // type: "T"(관광지) 또는 "P"(플랜) - id가 두 테이블에서 겹칠 수 있어 구분이 필요하다.
     @JsonView(Views.Public.class)
     @GetMapping("/getComment")
-    public ResponseEntity<?> getComment(@RequestParam String id, @RequestParam(defaultValue = "T") String type){
-        return commentService.getComment(id, type);
+    public ResponseEntity<?> getComment(@RequestParam String id, @RequestParam(defaultValue = "T") String type, HttpServletRequest request){
+        Users viewer = currentUserArgumentResolver.resolveOptional(request).orElse(null);
+        return commentService.getComment(id, type, viewer);
     }
 
     @DeleteMapping("/deleteComment/{id}")

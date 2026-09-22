@@ -47,6 +47,15 @@ public class TourComment {
     @JsonView(Views.Public.class)
     private LocalDate date;
 
+    // 로그인한 조회자 본인이 쓴 댓글인지 - 셀프 삭제 버튼 노출 여부를 프론트가 판단하는 데
+    // 쓴다. Users의 id/email은 더 이상 응답에 노출되지 않으므로(닉네임만 노출) 프론트가
+    // 직접 비교할 수 없어, Plans.mine과 같은 방식으로 서버가 대신 계산해서 내려준다.
+    @Transient
+    @Setter
+    @Getter
+    @JsonView(Views.Public.class)
+    private boolean mine;
+
     // 프론트는 "관광지 댓글"/"플랜 댓글"을 id + type("T"/"P")로 구분해 쓴다 (myComment 페이지 등)
     @JsonProperty("id")
     @JsonView(Views.Public.class)

@@ -63,29 +63,41 @@ public class CommentService {
 
     @Transactional
     public ResponseEntity<?> deleteComment(Users user, String id, String type) {
-        if (user.getRole() != Users.Role.ADMIN) {
-            return new StatusCode(HttpStatus.FORBIDDEN, "관리자만 댓글을 삭제할 수 있습니다.").sendResponse();
-        }
+        boolean isAdmin = user.getRole() == Users.Role.ADMIN;
         if (TargetType.valueOf(type) == TargetType.P) {
-            if (planCommentRepository.findById(Long.valueOf(id)).isEmpty()) {
+            Optional<PlanComment> comment = planCommentRepository.findById(Long.valueOf(id));
+            if (comment.isEmpty()) {
                 return new StatusCode(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.").sendResponse();
+            }
+            if (!isAdmin && !comment.get().getUser().getId().equals(user.getId())) {
+                return new StatusCode(HttpStatus.FORBIDDEN, "본인 또는 관리자만 댓글을 삭제할 수 있습니다.").sendResponse();
             }
             planCommentRepository.deleteById(Long.valueOf(id));
         } else {
-            if (tourCommentRepository.findById(Long.valueOf(id)).isEmpty()) {
+            Optional<TourComment> comment = tourCommentRepository.findById(Long.valueOf(id));
+            if (comment.isEmpty()) {
                 return new StatusCode(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.").sendResponse();
+            }
+            if (!isAdmin && !comment.get().getUser().getId().equals(user.getId())) {
+                return new StatusCode(HttpStatus.FORBIDDEN, "본인 또는 관리자만 댓글을 삭제할 수 있습니다.").sendResponse();
             }
             tourCommentRepository.deleteById(Long.valueOf(id));
         }
         return new StatusCode(HttpStatus.OK, "댓글이 삭제되었습니다.").sendResponse();
     }
 
-    public ResponseEntity<?> getComment(String id, String type) {
+    public ResponseEntity<?> getComment(String id, String type, Users viewer) {
         if (TargetType.valueOf(type) == TargetType.P) {
             List<PlanComment> comments = planCommentRepository.findByPlanId(Long.valueOf(id));
+            if (viewer != null) {
+                comments.forEach(c -> c.setMine(c.getUser().getId().equals(viewer.getId())));
+            }
             return new StatusCode(HttpStatus.OK, comments, "플랜댓글 조회성공").sendResponse();
         }
         List<TourComment> comments = tourCommentRepository.findByContentid(id);
+        if (viewer != null) {
+            comments.forEach(c -> c.setMine(c.getUser().getId().equals(viewer.getId())));
+        }
         return new StatusCode(HttpStatus.OK, comments, "관광지댓글 조회성공").sendResponse();
     }
 

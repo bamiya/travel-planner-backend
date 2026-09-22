@@ -47,6 +47,13 @@ public class PlanComment {
     @JsonView(Views.Public.class)
     private LocalDate date;
 
+    // TourComment.mine 참고 - 로그인한 조회자 본인 댓글인지 서버가 계산해 내려준다.
+    @Transient
+    @Setter
+    @Getter
+    @JsonView(Views.Public.class)
+    private boolean mine;
+
     @JsonProperty("id")
     @JsonView(Views.Public.class)
     public String getTargetId() {
